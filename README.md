@@ -1,7 +1,6 @@
 # Project: Company Intranet
 
-This is an internal-only Flask intranet for multiple departments.
-The goal is to have a single shared core that handles:
+This is an internal-only Flask intranet for multiple departments. The goal is to have a single shared core that handles:
 - Local user authentication (with hashed passwords)
 - Basic role-based access control (admin, manager, user)
 - Department-level data separation
@@ -13,3 +12,16 @@ All templates must extend a single `base.html` and reuse `theme.css` for shared 
 
 I plan to expand the system later with Google SSO, so design the user table and session handling to allow for that switch. But for now, only build local auth.
 
+## Running the app
+
+Install dependencies:
+
+```bash
+pip install -r requirements.txt
+```
+
+Start the development server:
+
+```bash
+flask run
+```
