@@ -1,0 +1,305 @@
+{% extends 'standby/base.html' %}
+
+{% block standby_title %}Dashboard{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
+{% block page_subtitle %}Welcome back, {{ current_user|default('User') }}! Here's your standby overview for {{ today }}{% endblock %}
+
+{% block standby_content %}
+    <!-- Notifications Banner -->
+    {% if notifications %}
+    <div class="alert alert-info alert-dismissible fade show mb-4" role="alert">
+        <div class="d-flex align-items-center">
+            <i class="bi bi-bell-fill me-2"></i>
+            <div>
+                <strong>Notifications:</strong>
+                {% for notification in notifications %}
+                <div>{{ notification }}</div>
+                {% endfor %}
+            </div>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+    {% endif %}
+
+    <!-- Main stats cards -->
+    <div class="row g-4 mb-4">
+        <!-- Current Standby -->
+        <div class="col-lg-3 col-md-6">
+            <div class="standby-card card shadow-sm border-primary h-100">
+                <div class="card-body text-center">
+                    <div class="d-flex align-items-center justify-content-center mb-2">
+                        <i class="bi bi-person-check-fill text-primary fs-1 me-2"></i>
+                    </div>
+                    <h5 class="card-title text-muted">Current Standby</h5>
+                    <span class="badge bg-primary fs-4 px-3 py-2">{{ current_standby }}</span>
+                    <div class="text-muted mt-2">
+                        <i class="bi bi-calendar3"></i> Today ({{ today }})
+                    </div>
+                    {% if current_standby == current_user %}
+                    <div class="alert alert-info mt-2 mb-0 py-1">
+                        <small><i class="bi bi-info-circle"></i> You're on standby today!</small>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        
+        <!-- Next Standby -->
+        <div class="col-lg-3 col-md-6">
+            <div class="standby-card card shadow-sm border-info h-100">
+                <div class="card-body text-center">
+                    <div class="d-flex align-items-center justify-content-center mb-2">
+                        <i class="bi bi-calendar-week text-info fs-1 me-2"></i>
+                    </div>
+                    <h5 class="card-title text-muted">Next Week's Standby</h5>
+                    <span class="badge bg-info text-dark fs-4 px-3 py-2">{{ next_standby }}</span>
+                    <div class="text-muted mt-2">
+                        <i class="bi bi-calendar3"></i> Next week ({{ next_week }})
+                    </div>
+                    {% if next_standby == current_user %}
+                    <div class="alert alert-warning mt-2 mb-0 py-1">
+                        <small><i class="bi bi-exclamation-triangle"></i> You're on standby next week!</small>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        
+        <!-- Overtime Hours -->
+        <div class="col-lg-3 col-md-6">
+            <div class="standby-card card shadow-sm border-success h-100">
+                <div class="card-body text-center">
+                    <div class="d-flex align-items-center justify-content-center mb-2">
+                        <i class="bi bi-clock-history text-success fs-1 me-2"></i>
+                    </div>
+                    <h5 class="card-title text-muted">Total Overtime (This Month)</h5>
+                    <span class="badge bg-success fs-4 px-3 py-2">{{ "%.1f"|format(total_overtime_hours) }} hrs</span>
+                    <div class="text-muted mt-2">
+                        <i class="bi bi-calendar-month"></i> {{ month_name }} {{ year }}
+                    </div>
+                    {% if total_overtime_hours > 0 %}
+                    <div class="mt-2">
+                        <a href="{{ url_for('standby.overtime') }}" class="btn btn-sm btn-outline-success">
+                            <i class="bi bi-eye"></i> View Details
+                        </a>
+                    </div>
+                    {% endif %}
+                    <!-- Overtime Progress Bar -->
+                    {% if monthly_overtime_limit %}
+                    <div class="mt-2">
+                        <div class="progress" style="height: 6px;">
+                            {% set progress_percent = (total_overtime_hours / monthly_overtime_limit * 100) %}
+                            {% if progress_percent > 100 %}
+                                {% set progress_percent = 100 %}
+                            {% endif %}
+                            <div class="progress-bar bg-success" style="width: {{ progress_percent }}%"></div>
+                        </div>
+                        <small class="text-muted">{{ "%.1f"|format(total_overtime_hours) }}/{{ monthly_overtime_limit }} hrs</small>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        
+        <!-- Team Status -->
+        <div class="col-lg-3 col-md-6">
+            <div class="standby-card card shadow-sm border-warning h-100">
+                <div class="card-body text-center">
+                    <div class="d-flex align-items-center justify-content-center mb-2">
+                        <i class="bi bi-people text-warning fs-1 me-2"></i>
+                    </div>
+                    <h5 class="card-title text-muted">Team Status</h5>
+                    <span class="badge bg-warning text-dark fs-4 px-3 py-2">{{ team_members|length }} Active</span>
+                    <div class="text-muted mt-2">
+                        <i class="bi bi-check-circle"></i> All systems operational
+                    </div>
+                    <div class="mt-2">
+                        <a href="{{ url_for('standby.roster') }}" class="btn btn-sm btn-outline-warning">
+                            <i class="bi bi-gear"></i> Manage Team
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Enhanced Quick Actions Row -->
+    <div class="row g-4 mb-4">
+        <div class="col-12">
+            <div class="standby-card card shadow-sm">
+                <div class="card-header bg-light">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-lightning text-primary"></i> Quick Actions
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-lg-3 col-md-6">
+                            <a href="{{ url_for('standby.overtime') }}" class="btn btn-outline-primary w-100 text-start p-3">
+                                <div class="d-flex align-items-center">
+                                    <i class="bi bi-clock fs-4 me-3"></i>
+                                    <div>
+                                        <div class="fw-bold">Log Overtime</div>
+                                        <small class="text-muted">Record your overtime hours</small>
+                                    </div>
+                                </div>
+                            </a>
+                        </div>
+                        <div class="col-lg-3 col-md-6">
+                            <a href="{{ url_for('standby.calendar') }}" class="btn btn-outline-info w-100 text-start p-3">
+                                <div class="d-flex align-items-center">
+                                    <i class="bi bi-calendar3 fs-4 me-3"></i>
+                                    <div>
+                                        <div class="fw-bold">View Calendar</div>
+                                        <small class="text-muted">See full standby schedule</small>
+                                    </div>
+                                </div>
+                            </a>
+                        </div>
+                        <div class="col-lg-3 col-md-6">
+                            <a href="{{ url_for('standby.roster') }}" class="btn btn-outline-primary w-100 text-start p-3">
+                                <div class="d-flex align-items-center">
+                                    <i class="bi bi-people fs-4 me-3"></i>
+                                    <div>
+                                        <div class="fw-bold">Manage Team</div>
+                                        <small class="text-muted">Update roster & overrides</small>
+                                    </div>
+                                </div>
+                            </a>
+                        </div>
+                        <div class="col-lg-3 col-md-6">
+                            <a href="{{ url_for('standby.roster') }}" class="btn btn-outline-info w-100 text-start p-3">
+                                <div class="d-flex align-items-center">
+                                    <i class="bi bi-calendar-plus fs-4 me-3"></i>
+                                    <div>
+                                        <div class="fw-bold">Add Override</div>
+                                        <small class="text-muted">Schedule shift changes</small>
+                                    </div>
+                                </div>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Secondary content row -->
+    <div class="row g-4">
+        <!-- Recent Overrides -->
+        <div class="col-lg-6">
+            <div class="standby-card card shadow-sm h-100">
+                <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-calendar-event text-warning"></i> Recent Overrides
+                    </h5>
+                    <a href="{{ url_for('standby.roster') }}" class="btn btn-sm btn-outline-primary">
+                        <i class="bi bi-plus-circle"></i> Add
+                    </a>
+                </div>
+                <div class="card-body">
+                    {% if recent_overrides %}
+                        <div class="list-group list-group-flush">
+                            {% for override in recent_overrides %}
+                            <div class="list-group-item d-flex justify-content-between align-items-center border-0 px-0">
+                                <div class="d-flex align-items-center">
+                                    <i class="bi bi-calendar-check text-success me-3"></i>
+                                    <div>
+                                        <strong>{{ override.date }}</strong>
+                                        <div class="text-muted small">{{ override.person }}</div>
+                                    </div>
+                                </div>
+                                <span class="badge bg-warning text-dark">{{ override.person }}</span>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <div class="text-center py-4">
+                            <i class="bi bi-calendar-x text-muted fs-1 mb-3"></i>
+                            <p class="text-muted mb-3">No recent overrides</p>
+                            <a href="{{ url_for('standby.roster') }}" class="btn btn-sm btn-outline-primary">
+                                <i class="bi bi-plus-circle"></i> Add Override
+                            </a>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Overtime Activity -->
+        <div class="col-lg-6">
+            <div class="standby-card card shadow-sm h-100">
+                <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-clock-history text-success"></i> Recent Overtime Activity
+                    </h5>
+                    <a href="{{ url_for('standby.overtime') }}" class="btn btn-sm btn-outline-success">
+                        <i class="bi bi-eye"></i> View All
+                    </a>
+                </div>
+                <div class="card-body">
+                    {% if recent_overtime %}
+                        <div class="list-group list-group-flush">
+                            {% for entry in recent_overtime %}
+                            <div class="list-group-item border-0 px-0">
+                                <div class="d-flex justify-content-between align-items-start">
+                                    <div class="d-flex align-items-center">
+                                        <i class="bi bi-clock text-success me-3"></i>
+                                        <div>
+                                            <strong>{{ entry.person }}</strong>
+                                            <div class="text-muted small">{{ entry.start_time|truncate(16, true, '') }}</div>
+                                        </div>
+                                    </div>
+                                    <span class="badge bg-success">{{ entry.duration_hours }}h</span>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <div class="text-center py-4">
+                            <i class="bi bi-clock text-muted fs-1 mb-3"></i>
+                            <p class="text-muted mb-3">No recent overtime activity</p>
+                            <a href="{{ url_for('standby.overtime') }}" class="btn btn-sm btn-outline-success">
+                                <i class="bi bi-plus-circle"></i> Log Overtime
+                            </a>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Upcoming Standby Schedule -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="standby-card card shadow-sm">
+                <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-calendar-week text-info"></i> Upcoming Standby Schedule
+                    </h5>
+                    <a href="{{ url_for('standby.calendar') }}" class="btn btn-sm btn-outline-info">
+                        <i class="bi bi-calendar3"></i> Full Calendar
+                    </a>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        {% for i in range(4) %}
+                        {% set future_date = (today_dt + timedelta(days=7*(i+1))).strftime('%Y-%m-%d') %}
+                        {% set future_person = get_standby_person(future_date) %}
+                        <div class="col-lg-3 col-md-6 mb-3">
+                            <div class="border rounded p-3 text-center h-100">
+                                <div class="text-muted small">Week {{ i + 2 }}</div>
+                                <div class="fw-bold fs-5">{{ future_person }}</div>
+                                <div class="text-muted small">{{ future_date }}</div>
+                                {% if future_person == current_user %}
+                                <span class="badge bg-warning text-dark mt-2">You</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %} 

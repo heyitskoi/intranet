@@ -1,0 +1,25 @@
+{
+  "team_members": [
+    {
+      "name": "Alice",
+      "color": "#007bff",
+      "active": true
+    },
+    {
+      "name": "Bob",
+      "color": "#28a745",
+      "active": true
+    },
+    {
+      "name": "Charlie",
+      "color": "#ffc107",
+      "active": true
+    }
+  ],
+  "rotation": [
+    "Alice",
+    "Bob",
+    "Charlie"
+  ],
+  "overrides": {}
+}

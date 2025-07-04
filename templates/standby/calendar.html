@@ -1,0 +1,764 @@
+{% extends "base.html" %}
+
+{% block title %}Calendar | Standby Overtime App{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Enhanced Header Section -->
+    <div class="calendar-header mb-4">
+        <div class="row align-items-center">
+            <div class="col-lg-8">
+                <div class="d-flex align-items-center">
+                    <div class="calendar-icon me-3">
+                        <i class="bi bi-calendar-event-fill"></i>
+                    </div>
+                    <div>
+                        <h1 class="calendar-title mb-1">Standby Rotation Calendar</h1>
+                        <p class="calendar-subtitle text-muted mb-0">Manage and view your team's standby schedule</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-4">
+                <div class="calendar-controls d-flex gap-2 justify-content-lg-end">
+                    <button id="todayBtn" class="btn btn-primary btn-modern">
+                        <i class="bi bi-calendar-check"></i> Today
+                    </button>
+                    <div class="btn-group btn-group-modern" role="group">
+                        <button id="monthViewBtn" class="btn btn-outline-primary active">Month</button>
+                        <button id="weekViewBtn" class="btn btn-outline-primary">Week</button>
+                    </div>
+                    <button id="exportBtn" class="btn btn-success btn-modern">
+                        <i class="bi bi-download"></i> Export
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Enhanced Loading indicator -->
+    <div id="calendarLoading" class="loading-container text-center py-5">
+        <div class="loading-spinner">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+        </div>
+        <p class="mt-3 text-muted">Loading your calendar...</p>
+    </div>
+    
+    <!-- Enhanced Error message -->
+    <div id="calendarError" class="alert alert-danger d-none error-container" role="alert">
+        <div class="d-flex align-items-center">
+            <i class="bi bi-exclamation-triangle-fill me-2"></i>
+            <span id="errorMessage">Failed to load calendar data.</span>
+        </div>
+        <button type="button" class="btn btn-sm btn-outline-danger ms-2" onclick="location.reload()">
+            <i class="bi bi-arrow-clockwise"></i> Retry
+        </button>
+    </div>
+    
+    <!-- Enhanced Calendar container -->
+    <div id="calendar" class="calendar-wrapper d-none"></div>
+    
+    <!-- Enhanced Legend -->
+    <div class="mt-4">
+        <div class="card shadow-lg legend-card">
+            <div class="card-header bg-gradient-primary d-flex justify-content-between align-items-center">
+                <h6 class="card-title mb-0 text-white">
+                    <i class="bi bi-palette-fill me-2"></i> Standby Legend
+                </h6>
+                <button id="toggleLegendBtn" class="btn btn-sm btn-light">
+                    <i class="bi bi-chevron-up"></i>
+                </button>
+            </div>
+            <div class="card-body" id="legendBody">
+                <div class="row" id="personLegend">
+                    <!-- Legend items will be populated by JavaScript -->
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Enhanced Event Details Modal -->
+<div class="modal fade" id="eventModal" tabindex="-1" aria-labelledby="eventModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg">
+            <div class="modal-header bg-gradient-primary text-white">
+                <h5 class="modal-title" id="eventModalLabel">
+                    <i class="bi bi-calendar-event me-2"></i>Standby Details
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4">
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <div class="detail-item">
+                            <label class="detail-label">Person</label>
+                            <div class="detail-value" id="modalPerson"></div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="detail-item">
+                            <label class="detail-label">Date</label>
+                            <div class="detail-value" id="modalDate"></div>
+                        </div>
+                    </div>
+                    <div class="col-12">
+                        <div class="detail-item">
+                            <label class="detail-label">Status</label>
+                            <div class="detail-value" id="modalStatus"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer bg-light">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <a href="/roster" class="btn btn-primary">
+                    <i class="bi bi-pencil"></i> Manage Roster
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- FullCalendar & Bootstrap Theme -->
+<link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.css" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/bootstrap5.global.min.css" rel="stylesheet">
+<link href="{{ url_for('static', filename='standby/css/calendar.css') }}" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/bootstrap5.global.min.js"></script>
+<script src="{{ url_for('static', filename='standby/js/calendar-utils.js') }}"></script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Initialize utilities
+    const utils = new CalendarUtils();
+    
+    // Configuration
+    const calendarEl = document.getElementById('calendar');
+    const loadingEl = document.getElementById('calendarLoading');
+    const errorEl = document.getElementById('calendarError');
+    const errorMessageEl = document.getElementById('errorMessage');
+    const todayBtn = document.getElementById('todayBtn');
+    const monthViewBtn = document.getElementById('monthViewBtn');
+    const weekViewBtn = document.getElementById('weekViewBtn');
+    const exportBtn = document.getElementById('exportBtn');
+    const legendEl = document.getElementById('personLegend');
+    const toggleLegendBtn = document.getElementById('toggleLegendBtn');
+    const legendBody = document.getElementById('legendBody');
+    
+    // Person colors from backend (fallback to defaults)
+    const personColors = JSON.parse('{{ config.THEME_COLORS|tojson|safe }}');
+    const defaultPersonColors = JSON.parse('{{ config.DEFAULT_PERSON_COLORS|tojson|safe }}');
+    
+    // Events data from Flask
+    const events = JSON.parse('{{ events|tojson|safe }}');
+    
+    // Initialize calendar
+    let calendar = new FullCalendar.Calendar(calendarEl, {
+        themeSystem: 'bootstrap5',
+        initialView: 'dayGridMonth',
+        headerToolbar: {
+            left: 'prev,next',
+            center: 'title',
+            right: 'dayGridMonth,timeGridWeek'
+        },
+        events: events,
+        height: 'auto',
+        eventDisplay: 'block',
+        eventTimeFormat: {
+            hour: 'numeric',
+            minute: '2-digit',
+            meridiem: 'short'
+        },
+        eventDidMount: function(info) {
+            const event = info.event;
+            const person = event.title;
+            const date = event.start.toISOString().split('T')[0];
+            const status = utils.getDateStatus(date);
+            
+            // Add status classes
+            if (date === utils.today) {
+                info.el.classList.add('fc-event-today');
+            } else if (date < utils.today) {
+                info.el.classList.add('fc-event-past');
+            } else {
+                info.el.classList.add('fc-event-future');
+            }
+            
+            // Add tooltip
+            info.el.setAttribute('data-bs-toggle', 'tooltip');
+            info.el.setAttribute('data-bs-placement', 'top');
+            info.el.setAttribute('data-bs-title', `${person} on standby - ${date} (${status})`);
+            
+            // Initialize Bootstrap tooltip
+            new bootstrap.Tooltip(info.el);
+        },
+        eventClick: function(info) {
+            const event = info.event;
+            const person = event.title;
+            const date = event.start.toISOString().split('T')[0];
+            const status = utils.getDateStatus(date);
+            
+            document.getElementById('modalPerson').textContent = person;
+            document.getElementById('modalDate').textContent = utils.formatDate(date);
+            document.getElementById('modalStatus').textContent = status;
+            
+            const modal = new bootstrap.Modal(document.getElementById('eventModal'));
+            modal.show();
+        },
+        datesSet: function(info) {
+            updateViewButtons(info.view.type);
+            document.title = `${info.view.title} | Standby Overtime App`;
+        },
+        loading: function(isLoading) {
+            if (isLoading) {
+                loadingEl.classList.remove('d-none');
+                calendarEl.classList.add('d-none');
+                errorEl.classList.add('d-none');
+            } else {
+                loadingEl.classList.add('d-none');
+                calendarEl.classList.remove('d-none');
+            }
+        },
+        eventDidUnmount: function(info) {
+            const tooltip = bootstrap.Tooltip.getInstance(info.el);
+            if (tooltip) {
+                tooltip.dispose();
+            }
+        }
+    });
+    
+    // Render calendar
+    try {
+        calendar.render();
+    } catch (error) {
+        console.error('Failed to render calendar:', error);
+        showError('Failed to initialize calendar. Please refresh the page.');
+    }
+    
+    // Event handlers
+    todayBtn.addEventListener('click', () => calendar.today());
+    
+    monthViewBtn.addEventListener('click', () => {
+        calendar.changeView('dayGridMonth');
+        updateViewButtons('dayGridMonth');
+    });
+    
+    weekViewBtn.addEventListener('click', () => {
+        calendar.changeView('timeGridWeek');
+        updateViewButtons('timeGridWeek');
+    });
+    
+    exportBtn.addEventListener('click', () => {
+        const events = calendar.getEvents();
+        const title = calendar.view.title;
+        utils.exportToCSV(events, title);
+        utils.showNotification('Calendar exported successfully!', 'success');
+    });
+    
+    toggleLegendBtn.addEventListener('click', () => {
+        const isVisible = !legendBody.classList.contains('d-none');
+        legendBody.classList.toggle('d-none');
+        toggleLegendBtn.innerHTML = isVisible ? 
+            '<i class="bi bi-chevron-down"></i>' : 
+            '<i class="bi bi-chevron-up"></i>';
+    });
+    
+    // Helper functions
+    function updateViewButtons(viewType) {
+        monthViewBtn.classList.toggle('active', viewType === 'dayGridMonth');
+        weekViewBtn.classList.toggle('active', viewType === 'timeGridWeek');
+    }
+    
+    function showError(message) {
+        errorMessageEl.textContent = message;
+        errorEl.classList.remove('d-none');
+        loadingEl.classList.add('d-none');
+        calendarEl.classList.add('d-none');
+    }
+    
+    // Generate legend
+    function generateLegend() {
+        legendEl.innerHTML = utils.generateLegendHTML(events, defaultPersonColors);
+    }
+    
+    // Initialize components
+    generateLegend();
+    utils.initResponsive(calendar);
+    utils.initKeyboardShortcuts(calendar);
+    
+    // Error handling
+    calendar.on('eventSourceFailure', function(error) {
+        console.error('Failed to load events:', error);
+        showError('Failed to load calendar events. Please refresh the page.');
+    });
+    
+    // Keyboard shortcuts help
+    document.addEventListener('keydown', function(e) {
+        if (e.altKey && e.key === 'k') {
+            utils.showKeyboardHelp();
+        }
+    });
+});
+</script>
+
+<style>
+/* Enhanced Calendar Styles */
+
+/* Calendar Header */
+.calendar-header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    padding: 2rem;
+    border-radius: 16px;
+    color: white;
+    box-shadow: 0 8px 32px rgba(102, 126, 234, 0.3);
+}
+
+.calendar-icon {
+    width: 60px;
+    height: 60px;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+}
+
+.calendar-title {
+    font-size: 2.5rem;
+    font-weight: 700;
+    margin: 0;
+    text-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.calendar-subtitle {
+    font-size: 1.1rem;
+    opacity: 0.9;
+}
+
+.calendar-controls {
+    flex-wrap: wrap;
+}
+
+/* Modern Button Styles */
+.btn-modern {
+    border-radius: 12px;
+    font-weight: 600;
+    padding: 0.75rem 1.5rem;
+    transition: all 0.3s ease;
+    border: none;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+
+.btn-modern:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(0,0,0,0.2);
+}
+
+.btn-group-modern .btn {
+    border-radius: 12px;
+    font-weight: 600;
+    padding: 0.75rem 1.5rem;
+    transition: all 0.3s ease;
+}
+
+.btn-group-modern .btn.active {
+    background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+    border-color: #007bff;
+    box-shadow: 0 4px 12px rgba(0, 123, 255, 0.3);
+}
+
+/* Loading Container */
+.loading-container {
+    background: white;
+    border-radius: 16px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+    margin: 2rem 0;
+}
+
+.loading-spinner {
+    display: inline-block;
+    padding: 2rem;
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    border-radius: 50%;
+}
+
+/* Error Container */
+.error-container {
+    border-radius: 12px;
+    border: none;
+    background: linear-gradient(135deg, #ff6b6b 0%, #ee5a52 100%);
+    color: white;
+    box-shadow: 0 4px 20px rgba(255, 107, 107, 0.3);
+}
+
+/* Calendar Wrapper */
+.calendar-wrapper {
+    background: white;
+    border-radius: 16px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+    padding: 2rem;
+    margin: 2rem 0;
+}
+
+/* Enhanced Calendar Styles */
+.fc {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+.fc-event {
+    cursor: pointer;
+    transition: all 0.3s ease;
+    border-radius: 8px;
+    border: none;
+    font-weight: 600;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.1);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.fc-event:hover {
+    transform: translateY(-3px) scale(1.02);
+    box-shadow: 0 8px 25px rgba(0,0,0,0.2);
+    z-index: 10;
+}
+
+.fc-event-today {
+    border: 3px solid #ffc107 !important;
+    font-weight: bold;
+    box-shadow: 0 0 0 3px rgba(255, 193, 7, 0.3), 0 4px 12px rgba(0,0,0,0.15);
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0% { box-shadow: 0 0 0 3px rgba(255, 193, 7, 0.3), 0 4px 12px rgba(0,0,0,0.15); }
+    50% { box-shadow: 0 0 0 6px rgba(255, 193, 7, 0.2), 0 4px 12px rgba(0,0,0,0.15); }
+    100% { box-shadow: 0 0 0 3px rgba(255, 193, 7, 0.3), 0 4px 12px rgba(0,0,0,0.15); }
+}
+
+.fc-event-past {
+    opacity: 0.6;
+    filter: grayscale(40%);
+}
+
+.fc-event-future {
+    opacity: 1;
+}
+
+/* Calendar Header Improvements */
+.fc-toolbar {
+    margin-bottom: 2rem;
+    padding: 1.5rem;
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    border-radius: 12px;
+    border: 1px solid #dee2e6;
+}
+
+.fc-toolbar-title {
+    font-size: 2rem !important;
+    font-weight: 700;
+    color: #2c3e50;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.1);
+}
+
+.fc-button {
+    border-radius: 10px !important;
+    font-weight: 600;
+    transition: all 0.3s ease;
+    border: none;
+    padding: 0.75rem 1.5rem;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.fc-button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+}
+
+.fc-button-primary {
+    background: linear-gradient(135deg, #007bff 0%, #0056b3 100%) !important;
+    border: none !important;
+}
+
+.fc-button-primary:hover {
+    background: linear-gradient(135deg, #0056b3 0%, #004085 100%) !important;
+}
+
+.fc-button-secondary {
+    background: linear-gradient(135deg, #6c757d 0%, #545b62 100%) !important;
+    border: none !important;
+    color: white !important;
+}
+
+.fc-button-secondary:hover {
+    background: linear-gradient(135deg, #545b62 0%, #3d4449 100%) !important;
+}
+
+.fc-button-secondary.active {
+    background: linear-gradient(135deg, #007bff 0%, #0056b3 100%) !important;
+    box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.3);
+}
+
+/* Day Styling */
+.fc-day-today {
+    background: linear-gradient(135deg, rgba(255, 193, 7, 0.15) 0%, rgba(255, 193, 7, 0.05) 100%) !important;
+    border-radius: 8px;
+}
+
+.fc-day-header {
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    font-weight: 700;
+    color: #495057;
+    padding: 1rem 0;
+    border-radius: 8px 8px 0 0;
+}
+
+.fc-day {
+    border-radius: 8px;
+    transition: all 0.2s ease;
+}
+
+.fc-day:hover {
+    background-color: rgba(0, 123, 255, 0.05);
+}
+
+/* Legend Card */
+.legend-card {
+    border-radius: 16px;
+    border: none;
+    overflow: hidden;
+}
+
+.bg-gradient-primary {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+}
+
+/* Modal Enhancements */
+.modal-content {
+    border-radius: 16px;
+    border: none;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+}
+
+.modal-header {
+    border-radius: 16px 16px 0 0;
+    padding: 1.5rem;
+}
+
+.modal-body {
+    padding: 2rem;
+}
+
+.detail-item {
+    margin-bottom: 1rem;
+}
+
+.detail-label {
+    font-weight: 600;
+    color: #6c757d;
+    font-size: 0.9rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 0.5rem;
+}
+
+.detail-value {
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    padding: 1rem;
+    border-radius: 8px;
+    border-left: 4px solid #007bff;
+    font-weight: 600;
+    color: #2c3e50;
+}
+
+/* Mobile Optimizations */
+@media (max-width: 768px) {
+    .calendar-header {
+        padding: 1.5rem;
+        text-align: center;
+    }
+    
+    .calendar-title {
+        font-size: 2rem;
+    }
+    
+    .calendar-controls {
+        justify-content: center;
+        margin-top: 1rem;
+    }
+    
+    .fc-toolbar {
+        flex-direction: column;
+        gap: 1rem;
+        padding: 1rem;
+    }
+    
+    .fc-toolbar-title {
+        font-size: 1.5rem !important;
+    }
+    
+    .fc-event {
+        font-size: 0.8rem;
+        padding: 4px 6px;
+    }
+    
+    .calendar-wrapper {
+        padding: 1rem;
+        margin: 1rem 0;
+    }
+    
+    .btn-modern {
+        padding: 0.5rem 1rem;
+        font-size: 0.9rem;
+    }
+}
+
+@media (max-width: 576px) {
+    .calendar-title {
+        font-size: 1.5rem;
+    }
+    
+    .calendar-icon {
+        width: 50px;
+        height: 50px;
+        font-size: 1.2rem;
+    }
+    
+    .fc-toolbar-title {
+        font-size: 1.2rem !important;
+    }
+    
+    .fc-event {
+        font-size: 0.7rem;
+        padding: 2px 4px;
+    }
+    
+    .btn-modern {
+        padding: 0.4rem 0.8rem;
+        font-size: 0.8rem;
+    }
+}
+
+/* Accessibility Improvements */
+.fc-event:focus {
+    outline: 3px solid #007bff;
+    outline-offset: 2px;
+}
+
+.fc-button:focus {
+    outline: 3px solid #007bff;
+    outline-offset: 2px;
+}
+
+/* Print Styles */
+@media print {
+    .btn, .modal, .keyboard-shortcuts, .fc-toolbar {
+        display: none !important;
+    }
+    
+    .fc-event {
+        break-inside: avoid;
+        border: 1px solid #000 !important;
+    }
+    
+    .fc-day-today {
+        background: #fff3cd !important;
+    }
+    
+    .calendar-wrapper {
+        box-shadow: none;
+        border: 1px solid #dee2e6;
+    }
+    
+    .calendar-header {
+        background: #f8f9fa !important;
+        color: #000 !important;
+    }
+}
+
+/* High Contrast Mode */
+@media (prefers-contrast: high) {
+    .fc-event {
+        border: 2px solid #000;
+    }
+    
+    .fc-event-today {
+        border: 3px solid #000 !important;
+        background: #000 !important;
+        color: #fff !important;
+    }
+}
+
+/* Reduced Motion */
+@media (prefers-reduced-motion: reduce) {
+    .fc-event,
+    .fc-button,
+    .btn-modern {
+        transition: none;
+    }
+    
+    .fc-event:hover {
+        transform: none;
+    }
+    
+    .fc-event-today {
+        animation: none;
+    }
+}
+
+/* Keyboard shortcuts hint */
+.keyboard-shortcuts {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background: linear-gradient(135deg, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.8) 100%);
+    color: white;
+    padding: 1rem;
+    border-radius: 12px;
+    font-size: 0.9rem;
+    z-index: 1000;
+    display: none;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+    backdrop-filter: blur(10px);
+}
+
+.keyboard-shortcuts.show {
+    display: block;
+    animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+</style>
+
+<!-- Keyboard shortcuts hint -->
+<div class="keyboard-shortcuts" id="keyboardShortcuts">
+    <strong>Keyboard Shortcuts:</strong><br>
+    ← → Navigate months<br>
+    T - Go to today<br>
+    M - Month view<br>
+    W - Week view
+</div>
+
+<script>
+// Show keyboard shortcuts on Alt+K
+document.addEventListener('keydown', function(e) {
+    if (e.altKey && e.key === 'k') {
+        const shortcuts = document.getElementById('keyboardShortcuts');
+        shortcuts.classList.toggle('show');
+        setTimeout(() => {
+            shortcuts.classList.remove('show');
+        }, 3000);
+    }
+});
+</script>
+{% endblock %} 
