@@ -1,8 +1,8 @@
 from flask import Flask
 from flask_login import LoginManager
 
-from config import Config
-from models import db, User
+from config import Config, BASE_DIR
+from models import db, User, Department, Role, AuditLog
 
 # extensions
 
@@ -10,7 +10,7 @@ login_manager = LoginManager()
 
 
 def create_app(config_class=Config):
-    app = Flask(__name__)
+    app = Flask(__name__, instance_path=BASE_DIR)
     app.config.from_object(config_class)
 
     db.init_app(app)
@@ -28,6 +28,7 @@ def create_app(config_class=Config):
 
     return app
 
+app = create_app()
+
 if __name__ == '__main__':
-    app = create_app()
     app.run()

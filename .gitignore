@@ -6,6 +6,8 @@ venv/
 
 # Ignore SQLite DB files (optional — only if you don’t want to commit the local DB)
 
+instance/
+
 # Ignore __pycache__ and compiled files
 __pycache__/
 *.pyc

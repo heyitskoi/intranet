@@ -25,3 +25,13 @@ Start the development server:
 ```bash
 flask run
 ```
+
+### Creating the database
+
+Run the Flask shell and create the tables once:
+
+```bash
+flask shell -c "from app import db; db.create_all()"
+```
+
+The SQLite database will be created at `intranet.db` in the project root.
