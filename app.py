@@ -27,6 +27,10 @@ def create_app(config_class=Config):
     from blueprints.standby import standby_bp
     app.register_blueprint(standby_bp)
 
+    # Ensure standby directories exist
+    from blueprints.standby.config import ensure_directories
+    ensure_directories()
+
     @app.route('/dashboard')
     @login_required
     def dashboard():

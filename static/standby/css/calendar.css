@@ -1,0 +1,403 @@
+/* Enhanced Calendar Styles */
+
+/* Calendar container improvements */
+#calendar {
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    padding: 1rem;
+}
+
+/* Enhanced event styling */
+.fc-event {
+    color: #fff;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(76, 175, 255, 0.15);
+    font-size: 1rem;
+    padding: 6px 12px;
+    transition: transform 0.2s, box-shadow 0.2s;
+    border: none;
+    position: relative;
+}
+
+.fc-event:hover {
+    transform: scale(1.04);
+    box-shadow: 0 6px 24px rgba(76, 175, 255, 0.25);
+    z-index: 10;
+}
+
+.fc-event .fc-event-title {
+    font-weight: 700;
+    letter-spacing: 0.5px;
+}
+
+.fc-event-today {
+    border: 3px solid #ffc107 !important;
+    font-weight: bold;
+    box-shadow: 0 0 0 2px rgba(255, 193, 7, 0.3);
+}
+
+.fc-event-past {
+    opacity: 0.6;
+    filter: grayscale(30%);
+}
+
+.fc-event-future {
+    opacity: 1;
+}
+
+/* Override events styling */
+.fc-event[data-override="true"] {
+    border-style: dashed;
+    border-width: 2px;
+}
+
+/* Calendar header improvements */
+.fc-toolbar {
+    margin-bottom: 1.5rem;
+    padding: 1rem;
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    border-radius: 8px;
+}
+
+.fc-toolbar-title {
+    font-size: 1.75rem !important;
+    font-weight: 700;
+    color: #2c3e50;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.1);
+}
+
+.fc-button {
+    border-radius: 8px !important;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    border: none;
+    padding: 0.5rem 1rem;
+}
+
+.fc-button:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+}
+
+.fc-button-primary {
+    background: linear-gradient(135deg, #007bff 0%, #0056b3 100%) !important;
+    border: none !important;
+}
+
+.fc-button-primary:hover {
+    background: linear-gradient(135deg, #0056b3 0%, #004085 100%) !important;
+}
+
+.fc-button-secondary {
+    background: linear-gradient(135deg, #6c757d 0%, #545b62 100%) !important;
+    border: none !important;
+    color: white !important;
+}
+
+.fc-button-secondary:hover {
+    background: linear-gradient(135deg, #545b62 0%, #3d4449 100%) !important;
+}
+
+.fc-button-secondary.active {
+    background: linear-gradient(135deg, #007bff 0%, #0056b3 100%) !important;
+    box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.3);
+}
+
+/* Day styling */
+.fc-daygrid-day {
+    background: linear-gradient(135deg, #f8faff 0%, #e9f0fb 100%);
+    border-radius: 8px;
+    transition: background 0.2s;
+}
+
+.fc-daygrid-day.fc-day-today {
+    background: linear-gradient(135deg, #fffbe6 0%, #fff3cd 100%);
+    border: 2px solid #ffc107;
+}
+
+.fc-daygrid-day:hover {
+    background: #e3f2fd;
+}
+
+.fc-day-header {
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    font-weight: 600;
+    color: #495057;
+    padding: 0.75rem 0;
+}
+
+/* Week view improvements */
+.fc-timegrid-slot {
+    border-color: #e9ecef;
+}
+
+.fc-timegrid-slot-label {
+    background: #f8f9fa;
+    font-weight: 500;
+}
+
+/* Legend improvements */
+#personLegend .col-md-3 {
+    min-width: 140px;
+    margin-bottom: 0.75rem;
+}
+
+#personLegend .d-flex {
+    padding: 0.5rem;
+    border-radius: 6px;
+    transition: background-color 0.2s ease;
+}
+
+#personLegend .d-flex:hover {
+    background-color: #f8f9fa;
+}
+
+#personLegend .badge {
+    font-size: 0.7rem;
+    padding: 0.25rem 0.5rem;
+}
+
+/* Modal improvements */
+.modal-content {
+    border-radius: 12px;
+    border: none;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+}
+
+.modal-header {
+    background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+    color: white;
+    border-radius: 12px 12px 0 0;
+}
+
+.modal-body p {
+    margin-bottom: 0.75rem;
+    padding: 0.75rem;
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    border-radius: 6px;
+    border-left: 4px solid #007bff;
+    font-weight: 500;
+}
+
+/* Loading improvements */
+.spinner-border {
+    width: 3.5rem;
+    height: 3.5rem;
+    border-width: 0.25rem;
+}
+
+/* Error state improvements */
+.alert-danger {
+    border-radius: 8px;
+    border: none;
+    background: linear-gradient(135deg, #f8d7da 0%, #f5c6cb 100%);
+    color: #721c24;
+}
+
+/* Export button improvements */
+#exportBtn {
+    background: linear-gradient(135deg, #28a745 0%, #1e7e34 100%);
+    border: none;
+    color: white;
+    font-weight: 500;
+}
+
+#exportBtn:hover {
+    background: linear-gradient(135deg, #1e7e34 0%, #155724 100%);
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+}
+
+/* Keyboard shortcuts improvements */
+.keyboard-shortcuts {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background: linear-gradient(135deg, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.8) 100%);
+    color: white;
+    padding: 15px;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    z-index: 1000;
+    display: none;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+    backdrop-filter: blur(10px);
+}
+
+.keyboard-shortcuts.show {
+    display: block;
+    animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Responsive improvements */
+@media (max-width: 768px) {
+    .fc-toolbar {
+        flex-direction: column;
+        gap: 1rem;
+        padding: 0.75rem;
+    }
+    
+    .fc-toolbar-title {
+        font-size: 1.4rem !important;
+        text-align: center;
+    }
+    
+    .fc-event {
+        font-size: 0.75rem;
+        padding: 3px 6px;
+    }
+    
+    .d-flex.justify-content-between {
+        flex-direction: column;
+        gap: 1rem;
+        align-items: stretch !important;
+    }
+    
+    .d-flex.gap-2 {
+        justify-content: center;
+        flex-wrap: wrap;
+    }
+    
+    .btn {
+        font-size: 0.9rem;
+        padding: 0.5rem 0.75rem;
+    }
+    
+    #personLegend .col-md-3 {
+        min-width: 120px;
+    }
+}
+
+@media (max-width: 576px) {
+    .fc-toolbar-title {
+        font-size: 1.2rem !important;
+    }
+    
+    .fc-event {
+        font-size: 0.7rem;
+        padding: 2px 4px;
+    }
+    
+    .btn {
+        font-size: 0.8rem;
+        padding: 0.4rem 0.6rem;
+    }
+}
+
+/* Print styles */
+@media print {
+    .btn, .modal, .keyboard-shortcuts, .fc-toolbar {
+        display: none !important;
+    }
+    
+    .fc-event {
+        break-inside: avoid;
+        border: 1px solid #000 !important;
+        color: #000 !important;
+        background: #fff !important;
+    }
+    
+    .fc-day-today {
+        background: #f0f0f0 !important;
+    }
+    
+    #calendar {
+        box-shadow: none;
+        border: 1px solid #ccc;
+    }
+}
+
+/* Accessibility improvements */
+.fc-event:focus {
+    outline: 3px solid #007bff;
+    outline-offset: 2px;
+}
+
+.fc-button:focus {
+    outline: 3px solid #007bff;
+    outline-offset: 2px;
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+    .fc-event {
+        border: 2px solid #000;
+    }
+    
+    .fc-event-today {
+        border: 3px solid #000 !important;
+    }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+    .fc-event,
+    .fc-button,
+    .btn {
+        transition: none;
+    }
+    
+    .fc-event:hover {
+        transform: none;
+    }
+    
+    .keyboard-shortcuts.show {
+        animation: none;
+    }
+}
+
+body {
+    background: linear-gradient(120deg, #e0e7ff 0%, #f8fafc 100%);
+    min-height: 100vh;
+}
+
+.calendar-wrapper, #calendar {
+    background: rgba(255, 255, 255, 0.85);
+    border-radius: 20px;
+    box-shadow: 0 8px 32px rgba(76, 110, 245, 0.12), 0 1.5px 6px rgba(0,0,0,0.04);
+    padding: 2rem;
+    margin: 2rem 0;
+    backdrop-filter: blur(2px);
+    border: 1.5px solid #e0e7ff;
+}
+
+.fc-daygrid-day {
+    background: linear-gradient(135deg, #f3f6fd 0%, #e9f0fb 100%);
+    border-radius: 10px;
+    transition: background 0.2s;
+}
+
+.fc-daygrid-day.fc-day-today {
+    background: linear-gradient(135deg, #fffbe6 0%, #ffe9b3 100%);
+    border: 2px solid #ffc107;
+}
+
+.fc-daygrid-day:hover {
+    background: #e3f2fd;
+}
+
+.fc-toolbar {
+    background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+    color: #fff;
+    border-radius: 12px;
+    margin-bottom: 2rem;
+    padding: 1.5rem;
+    box-shadow: 0 2px 8px rgba(102, 126, 234, 0.12);
+}
+
+.fc-toolbar-title {
+    color: #fff !important;
+    text-shadow: 0 2px 4px rgba(0,0,0,0.08);
+} 

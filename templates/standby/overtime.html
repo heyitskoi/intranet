@@ -1,0 +1,666 @@
+{% extends 'base.html' %}
+
+{% block title %}Overtime | Standby Overtime App{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Page Header with Breadcrumb -->
+    <nav aria-label="breadcrumb" class="mb-3">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="/dashboard">Dashboard</a></li>
+            <li class="breadcrumb-item active" aria-current="page">Overtime Management</li>
+        </ol>
+    </nav>
+
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="mb-1">Log Overtime</h2>
+            <p class="text-muted mb-0">Record your overtime hours and track team activity</p>
+        </div>
+        <div class="btn-group" role="group" aria-label="Quick actions">
+            <button type="button" class="btn btn-outline-success" onclick="exportOvertimeData()">
+                <i class="bi bi-download"></i> Export
+            </button>
+            <button type="button" class="btn btn-outline-info" onclick="showQuickEntry()">
+                <i class="bi bi-lightning"></i> Quick Entry
+            </button>
+        </div>
+    </div>
+
+    <!-- Flash Messages -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show" role="alert">
+                    <i class="bi bi-{{ 'exclamation-triangle' if category == 'error' else 'check-circle' }} me-2"></i>
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <div class="row g-4">
+        <!-- Overtime Entry Form -->
+        <div class="col-lg-5">
+            <div class="card shadow-sm">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-clock"></i> New Overtime Entry
+                        <small class="d-block mt-1">for {{ current_user|default('Current User') }}</small>
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form method="post" id="overtimeForm">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label for="start_time" class="form-label">
+                                    <i class="bi bi-play-circle text-success"></i> Start Time
+                                </label>
+                                <input type="datetime-local" class="form-control" id="start_time" name="start_time" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="end_time" class="form-label">
+                                    <i class="bi bi-stop-circle text-danger"></i> End Time
+                                </label>
+                                <input type="datetime-local" class="form-control" id="end_time" name="end_time" required>
+                            </div>
+                            <div class="col-12">
+                                <div class="alert alert-info py-2" id="durationDisplay" style="display: none;">
+                                    <i class="bi bi-clock-history"></i> 
+                                    <strong>Duration:</strong> <span id="durationText">0 hours 0 minutes</span>
+                                </div>
+                            </div>
+                            <div class="col-12">
+                                <label for="issue_description" class="form-label">
+                                    <i class="bi bi-exclamation-triangle text-warning"></i> Issue Description
+                                    <span class="text-muted">(optional)</span>
+                                </label>
+                                <textarea class="form-control" id="issue_description" name="issue_description" rows="3" 
+                                    placeholder="Describe the issue that required overtime..."></textarea>
+                            </div>
+                            <div class="col-12">
+                                <label for="resolution_notes" class="form-label">
+                                    <i class="bi bi-check-circle text-success"></i> Resolution Notes
+                                    <span class="text-muted">(optional)</span>
+                                </label>
+                                <textarea class="form-control" id="resolution_notes" name="resolution_notes" rows="3"
+                                    placeholder="How was the issue resolved?"></textarea>
+                            </div>
+                            <div class="col-12">
+                                <button type="submit" class="btn btn-primary w-100">
+                                    <i class="bi bi-plus-circle"></i> Submit Overtime
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Quick Entry Panel -->
+            <div class="card shadow-sm mt-3" id="quickEntryPanel" style="display: none;">
+                <div class="card-header bg-success text-white">
+                    <h6 class="card-title mb-0">
+                        <i class="bi bi-lightning"></i> Quick Entry
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-info mb-3">
+                        <i class="bi bi-info-circle"></i>
+                        <strong>Quick Entry for:</strong> {{ current_user|default('Current User') }}
+                        <br><small class="text-muted">Will automatically set issue and resolution to general support</small>
+                    </div>
+                    <div class="row g-2">
+                        <div class="col-6">
+                            <button type="button" class="btn btn-outline-primary w-100" onclick="setQuickTime(1)">
+                                1 Hour
+                            </button>
+                        </div>
+                        <div class="col-6">
+                            <button type="button" class="btn btn-outline-primary w-100" onclick="setQuickTime(2)">
+                                2 Hours
+                            </button>
+                        </div>
+                        <div class="col-6">
+                            <button type="button" class="btn btn-outline-primary w-100" onclick="setQuickTime(4)">
+                                4 Hours
+                            </button>
+                        </div>
+                        <div class="col-6">
+                            <button type="button" class="btn btn-outline-primary w-100" onclick="setQuickTime(8)">
+                                8 Hours
+                            </button>
+                        </div>
+                        <div class="col-12 mt-2">
+                            <button type="button" class="btn btn-outline-secondary w-100" onclick="setCustomQuickTime()">
+                                <i class="bi bi-clock"></i> Custom Duration
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Overtime Logs -->
+        <div class="col-lg-7">
+            <div class="card shadow-sm">
+                <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-clock-history"></i> Overtime Logs
+                    </h5>
+                    <div class="d-flex gap-2">
+                        <form method="get" action="/overtime" class="d-flex gap-2">
+                            <select name="person" id="person" class="form-select form-select-sm" style="width: auto;">
+                                <option value="">All Team Members</option>
+                                {% for member in team_members %}
+                                    <option value="{{ member.name }}"
+                                        {% if member.name == selected_person %}selected{% endif %}>
+                                        {{ member.name }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                            <button type="submit" class="btn btn-sm btn-outline-primary">
+                                <i class="bi bi-funnel"></i> Filter
+                            </button>
+                        </form>
+                    </div>
+                </div>
+                <div class="card-body p-0">
+                    {% if overtime_logs %}
+                        <div class="table-responsive">
+                            <table class="table table-hover mb-0 align-middle">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Person</th>
+                                        <th>Date</th>
+                                        <th>Duration</th>
+                                        <th>Issue</th>
+                                        <th>Resolution</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for log in overtime_logs %}
+                                    <tr>
+                                        <td>
+                                            <div class="d-flex align-items-center">
+                                                <div class="avatar-sm me-2">
+                                                    <span class="badge bg-primary rounded-pill">{{ log.person[0].upper() if log.person and log.person|length > 0 else '?' }}</span>
+                                                </div>
+                                                <span class="fw-medium">{{ log.person or 'Unknown' }}</span>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <div class="small">
+                                                {% if log.start_time and ' ' in log.start_time %}
+                                                    <div class="fw-medium">{{ log.start_time.split(' ')[0] }}</div>
+                                                    <div class="text-muted">{{ log.start_time.split(' ')[1][:5] }} - {{ log.end_time.split(' ')[1][:5] if log.end_time and ' ' in log.end_time else '' }}</div>
+                                                {% else %}
+                                                    <div class="fw-medium">{{ log.start_time or 'N/A' }}</div>
+                                                    <div class="text-muted">{{ log.end_time or 'N/A' }}</div>
+                                                {% endif %}
+                                            </div>
+                                        </td>
+                                        <td>
+                                            {% if log.duration_hours %}
+                                                <span class="badge bg-success">{{ log.duration_hours }}h</span>
+                                            {% elif log.start_time and log.end_time and ' ' in log.start_time and ' ' in log.end_time %}
+                                                {% set start = log.start_time.split(' ')[1] %}
+                                                {% set end = log.end_time.split(' ')[1] %}
+                                                {% if ':' in start and ':' in end %}
+                                                    {% set start_hour = start.split(':')[0]|int %}
+                                                    {% set start_min = start.split(':')[1]|int %}
+                                                    {% set end_hour = end.split(':')[0]|int %}
+                                                    {% set end_min = end.split(':')[1]|int %}
+                                                    {% set duration = (end_hour - start_hour) + (end_min - start_min)/60 %}
+                                                    <span class="badge bg-success">{{ "%.1f"|format(duration) }}h</span>
+                                                {% else %}
+                                                    <span class="badge bg-secondary">N/A</span>
+                                                {% endif %}
+                                            {% else %}
+                                                <span class="badge bg-secondary">N/A</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if log.issue_description %}
+                                                <div class="text-truncate" style="max-width: 150px;" title="{{ log.issue_description }}">
+                                                    {{ log.issue_description }}
+                                                </div>
+                                            {% else %}
+                                                <span class="text-muted">-</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if log.resolution_notes %}
+                                                <div class="text-truncate" style="max-width: 150px;" title="{{ log.resolution_notes }}">
+                                                    {{ log.resolution_notes }}
+                                                </div>
+                                            {% else %}
+                                                <span class="text-muted">-</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            <div class="btn-group btn-group-sm">
+                                                <button type="button" class="btn btn-outline-secondary" 
+                                                    onclick="viewOvertimeDetails('{{ log.id }}', '{{ log.person }}', '{{ log.year }}', '{{ log.month }}')" title="View Details">
+                                                    <i class="bi bi-eye"></i>
+                                                </button>
+                                                <button type="button" class="btn btn-outline-primary" 
+                                                    data-person="{{ log.person }}" data-year="{{ log.year }}" data-month="{{ log.month }}" data-id="{{ log.id }}"
+                                                    onclick="editOvertime(this)" title="Edit">
+                                                    <i class="bi bi-pencil"></i>
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% else %}
+                        <div class="text-center py-5">
+                            <i class="bi bi-clock text-muted fs-1 mb-3"></i>
+                            <p class="text-muted mb-3">No overtime logs for this month.</p>
+                            <button type="button" class="btn btn-primary" onclick="document.getElementById('start_time').focus()">
+                                <i class="bi bi-plus-circle"></i> Log Your First Overtime
+                            </button>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Summary Stats -->
+            {% if overtime_logs %}
+            <div class="row g-3 mt-3">
+                <div class="col-md-4">
+                    <div class="card bg-primary text-white">
+                        <div class="card-body text-center">
+                            <i class="bi bi-clock-history fs-1 mb-2"></i>
+                            <h6 class="card-title">Total Hours</h6>
+                            <h4 class="mb-0">{{ "%.1f"|format(total_hours|default(0)) if total_hours is defined else "0.0" }}</h4>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card bg-success text-white">
+                        <div class="card-body text-center">
+                            <i class="bi bi-calendar-event fs-1 mb-2"></i>
+                            <h6 class="card-title">Entries</h6>
+                            <h4 class="mb-0">{{ overtime_logs|length }}</h4>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card bg-info text-white">
+                        <div class="card-body text-center">
+                            <i class="bi bi-people fs-1 mb-2"></i>
+                            <h6 class="card-title">Team Members</h6>
+                            <h4 class="mb-0">{{ team_members|length }}</h4>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Overtime Details Modal -->
+<div class="modal fade" id="overtimeDetailsModal" tabindex="-1" aria-labelledby="overtimeDetailsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="overtimeDetailsModalLabel">Overtime Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="overtimeDetailsContent">
+                <!-- Content will be loaded dynamically -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary" id="editOvertimeBtn">
+                    <i class="bi bi-pencil"></i> Edit
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Overtime Modal -->
+<div class="modal fade" id="editOvertimeModal" tabindex="-1" aria-labelledby="editOvertimeModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form id="editOvertimeForm">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="editOvertimeModalLabel">Edit Overtime Entry</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" id="edit_person" name="person">
+                    <input type="hidden" id="edit_year" name="year">
+                    <input type="hidden" id="edit_month" name="month">
+                    <input type="hidden" id="edit_id" name="id">
+                    <div class="mb-3">
+                        <label for="edit_start_time" class="form-label">Start Time</label>
+                        <input type="datetime-local" class="form-control" id="edit_start_time" name="start_time" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit_end_time" class="form-label">End Time</label>
+                        <input type="datetime-local" class="form-control" id="edit_end_time" name="end_time" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit_issue_description" class="form-label">Issue Description</label>
+                        <textarea class="form-control" id="edit_issue_description" name="issue_description" rows="2"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit_resolution_notes" class="form-label">Resolution Notes</label>
+                        <textarea class="form-control" id="edit_resolution_notes" name="resolution_notes" rows="2"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<style>
+/* Enhanced styling for overtime page */
+.avatar-sm {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.table th {
+    font-weight: 600;
+    border-bottom: 2px solid #dee2e6;
+}
+
+.table-hover tbody tr:hover {
+    background-color: rgba(0, 123, 255, 0.05);
+}
+
+.btn-group-sm .btn {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.875rem;
+}
+
+.text-truncate {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Duration display styling */
+#durationDisplay {
+    border-left: 4px solid #17a2b8;
+}
+
+/* Quick entry panel styling */
+#quickEntryPanel .btn {
+    border-radius: 0.375rem;
+    font-weight: 500;
+}
+
+/* Responsive improvements */
+@media (max-width: 768px) {
+    .d-flex.justify-content-between {
+        flex-direction: column;
+        gap: 1rem;
+        align-items: stretch !important;
+    }
+    
+    .btn-group {
+        flex-direction: column;
+        width: 100%;
+    }
+    
+    .btn-group .btn {
+        margin-bottom: 0.25rem;
+    }
+    
+    .table-responsive {
+        font-size: 0.875rem;
+    }
+    
+    .card-body {
+        padding: 1rem;
+    }
+}
+
+/* Animation for new entries */
+.table tbody tr {
+    animation: fadeIn 0.3s ease-in-out;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* Enhanced focus states */
+.form-control:focus,
+.form-select:focus {
+    border-color: #007bff;
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+}
+
+.btn:focus {
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+}
+</style>
+
+<script>
+// Duration calculation
+function calculateDuration() {
+    const startTime = document.getElementById('start_time').value;
+    const endTime = document.getElementById('end_time').value;
+    
+    if (startTime && endTime) {
+        const start = new Date(startTime);
+        const end = new Date(endTime);
+        const duration = (end - start) / (1000 * 60 * 60); // hours
+        
+        if (duration > 0) {
+            const hours = Math.floor(duration);
+            const minutes = Math.round((duration - hours) * 60);
+            document.getElementById('durationText').textContent = `${hours} hours ${minutes} minutes`;
+            document.getElementById('durationDisplay').style.display = 'block';
+        } else {
+            document.getElementById('durationDisplay').style.display = 'none';
+        }
+    } else {
+        document.getElementById('durationDisplay').style.display = 'none';
+    }
+}
+
+// Quick entry functionality
+function showQuickEntry() {
+    const panel = document.getElementById('quickEntryPanel');
+    panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+}
+
+function setQuickTime(hours) {
+    const now = new Date();
+    const startTime = new Date(now.getTime() - (hours * 60 * 60 * 1000));
+    
+    document.getElementById('start_time').value = startTime.toISOString().slice(0, 16);
+    document.getElementById('end_time').value = now.toISOString().slice(0, 16);
+    
+    // Set default issue and resolution text for quick entry
+    document.getElementById('issue_description').value = 'General support - standby duty';
+    document.getElementById('resolution_notes').value = 'Issue resolved - general support provided';
+    
+    calculateDuration();
+    showQuickEntry();
+    
+    // Show confirmation message
+    const alertDiv = document.createElement('div');
+    alertDiv.className = 'alert alert-success alert-dismissible fade show mt-3';
+    alertDiv.innerHTML = `
+        <i class="bi bi-check-circle me-2"></i>
+        Quick entry set for ${hours} hour${hours > 1 ? 's' : ''} - ready to submit!
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    `;
+    document.querySelector('.card-body').appendChild(alertDiv);
+    
+    // Auto-dismiss after 3 seconds
+    setTimeout(() => {
+        if (alertDiv.parentNode) {
+            alertDiv.remove();
+        }
+    }, 3000);
+}
+
+function setCustomQuickTime() {
+    const hours = prompt('Enter duration in hours (e.g., 1.5 for 1 hour 30 minutes):', '1');
+    if (hours && !isNaN(hours) && parseFloat(hours) > 0) {
+        const now = new Date();
+        const startTime = new Date(now.getTime() - (parseFloat(hours) * 60 * 60 * 1000));
+        
+        document.getElementById('start_time').value = startTime.toISOString().slice(0, 16);
+        document.getElementById('end_time').value = now.toISOString().slice(0, 16);
+        
+        // Set default issue and resolution text for quick entry
+        document.getElementById('issue_description').value = 'General support - standby duty';
+        document.getElementById('resolution_notes').value = 'Issue resolved - general support provided';
+        
+        calculateDuration();
+        showQuickEntry();
+        
+        // Show confirmation message
+        const alertDiv = document.createElement('div');
+        alertDiv.className = 'alert alert-success alert-dismissible fade show mt-3';
+        alertDiv.innerHTML = `
+            <i class="bi bi-check-circle me-2"></i>
+            Quick entry set for ${hours} hour${parseFloat(hours) > 1 ? 's' : ''} - ready to submit!
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        `;
+        document.querySelector('.card-body').appendChild(alertDiv);
+        
+        // Auto-dismiss after 3 seconds
+        setTimeout(() => {
+            if (alertDiv.parentNode) {
+                alertDiv.remove();
+            }
+        }, 3000);
+    }
+}
+
+// Export functionality
+function exportOvertimeData() {
+    // This would typically make an AJAX call to export data
+    alert('Export functionality would be implemented here');
+}
+
+// View overtime details
+function viewOvertimeDetails(id, person, year, month) {
+    document.getElementById('overtimeDetailsContent').innerHTML = `
+        <div class="text-center">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <p class="mt-3">Loading overtime details...</p>
+        </div>
+    `;
+    const modal = new bootstrap.Modal(document.getElementById('overtimeDetailsModal'));
+    modal.show();
+    fetch(`/overtime/edit/${encodeURIComponent(person)}/${year}/${month}/${id}`)
+        .then(res => res.json())
+        .then(log => {
+            if (log.error) {
+                document.getElementById('overtimeDetailsContent').innerHTML = `<div class='alert alert-danger'>${log.error}</div>`;
+                return;
+            }
+            document.getElementById('overtimeDetailsContent').innerHTML = `
+                <dl class="row">
+                    <dt class="col-sm-3">Person</dt><dd class="col-sm-9">${log.person}</dd>
+                    <dt class="col-sm-3">Start Time</dt><dd class="col-sm-9">${log.start_time}</dd>
+                    <dt class="col-sm-3">End Time</dt><dd class="col-sm-9">${log.end_time}</dd>
+                    <dt class="col-sm-3">Duration</dt><dd class="col-sm-9">${log.duration_hours} hours</dd>
+                    <dt class="col-sm-3">Issue</dt><dd class="col-sm-9">${log.issue_description || '-'}</dd>
+                    <dt class="col-sm-3">Resolution</dt><dd class="col-sm-9">${log.resolution_notes || '-'}</dd>
+                </dl>
+            `;
+        });
+}
+
+// Edit overtime
+function editOvertime(btn) {
+    const person = btn.getAttribute('data-person');
+    const year = btn.getAttribute('data-year');
+    const month = btn.getAttribute('data-month');
+    const id = btn.getAttribute('data-id');
+    fetch(`/overtime/edit/${encodeURIComponent(person)}/${year}/${month}/${id}`)
+        .then(res => res.json())
+        .then(log => {
+            if (log.error) {
+                alert(log.error);
+                return;
+            }
+            document.getElementById('edit_person').value = person;
+            document.getElementById('edit_year').value = year;
+            document.getElementById('edit_month').value = month;
+            document.getElementById('edit_id').value = id;
+            document.getElementById('edit_start_time').value = log.start_time.replace(' ', 'T');
+            document.getElementById('edit_end_time').value = log.end_time.replace(' ', 'T');
+            document.getElementById('edit_issue_description').value = log.issue_description || '';
+            document.getElementById('edit_resolution_notes').value = log.resolution_notes || '';
+            const modal = new bootstrap.Modal(document.getElementById('editOvertimeModal'));
+            modal.show();
+        });
+}
+
+document.getElementById('editOvertimeForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    const person = document.getElementById('edit_person').value;
+    const year = document.getElementById('edit_year').value;
+    const month = document.getElementById('edit_month').value;
+    const id = document.getElementById('edit_id').value;
+    const formData = new FormData(this);
+    fetch(`/overtime/edit/${encodeURIComponent(person)}/${year}/${month}/${id}`, {
+        method: 'POST',
+        body: formData
+    }).then(res => {
+        if (res.redirected) {
+            window.location.href = res.url;
+        } else {
+            return res.json();
+        }
+    }).then(data => {
+        if (data && data.error) {
+            alert(data.error);
+        }
+    });
+});
+
+// Event listeners
+document.addEventListener('DOMContentLoaded', function() {
+    // Set default times
+    const now = new Date();
+    const oneHourAgo = new Date(now.getTime() - (60 * 60 * 1000));
+    
+    document.getElementById('start_time').value = oneHourAgo.toISOString().slice(0, 16);
+    document.getElementById('end_time').value = now.toISOString().slice(0, 16);
+    
+    // Add event listeners for duration calculation
+    document.getElementById('start_time').addEventListener('change', calculateDuration);
+    document.getElementById('end_time').addEventListener('change', calculateDuration);
+    
+    // Calculate initial duration
+    calculateDuration();
+    
+    // Auto-submit filter form when selection changes
+    document.getElementById('person').addEventListener('change', function() {
+        if (this.value !== '') {
+            this.form.submit();
+        }
+    });
+});
+</script>
+{% endblock %} 
