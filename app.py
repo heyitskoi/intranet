@@ -1,5 +1,5 @@
 from flask import Flask
-from flask_login import LoginManager
+from flask_login import LoginManager, login_required, current_user
 
 from config import Config, BASE_DIR
 from models import db, User, Department, Role, AuditLog
@@ -15,6 +15,7 @@ def create_app(config_class=Config):
 
     db.init_app(app)
     login_manager.init_app(app)
+    login_manager.login_view = 'auth.login'
 
     @login_manager.user_loader
     def load_user(user_id):
@@ -25,6 +26,13 @@ def create_app(config_class=Config):
 
     from blueprints.standby import standby_bp
     app.register_blueprint(standby_bp)
+
+    @app.route('/dashboard')
+    @login_required
+    def dashboard():
+        return (
+            f"Welcome {current_user.username} from Department {current_user.department_id}"
+        )
 
     return app
 
