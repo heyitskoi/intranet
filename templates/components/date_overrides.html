@@ -1,0 +1,60 @@
+{% macro date_overrides_section(overrides, team_members) %}
+{% if overrides %}
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card shadow-sm">
+            <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-calendar-event"></i> Date Overrides ({{ overrides|length }})
+                </h5>
+                <button type="button" class="btn btn-light btn-sm" data-bs-toggle="modal" data-bs-target="#addOverrideModal">
+                    <i class="bi bi-plus-circle"></i> Add Override
+                </button>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0 align-middle">
+                        <thead class="table-light">
+                            <tr>
+                                <th scope="col">Date</th>
+                                <th scope="col">Person</th>
+                                <th scope="col">Type</th>
+                                <th scope="col">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for date, person in overrides.items() %}
+                            <tr>
+                                <td>
+                                    <div class="d-flex align-items-center">
+                                        <i class="bi bi-calendar-check text-success me-2"></i>
+                                        <span class="fw-medium">{{ date }}</span>
+                                    </div>
+                                </td>
+                                <td>
+                                    <span class="badge bg-info">{{ person }}</span>
+                                </td>
+                                <td>
+                                    <span class="badge bg-warning text-dark">Override</span>
+                                </td>
+                                <td>
+                                    <form method="post" action="/roster/remove_override" class="d-inline">
+                                        <input type="hidden" name="date" value="{{ date }}">
+                                        <button type="submit" class="btn btn-sm btn-outline-danger" 
+                                                onclick="return confirm('Remove override for {{ date }}?')"
+                                                title="Remove override">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </form>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endmacro %} 

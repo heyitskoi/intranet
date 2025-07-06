@@ -1,0 +1,78 @@
+{% macro render_rotation_pattern(rotation, duration_config=None, today_date=None) %}
+    <div class="card shadow-sm h-100 rotation-pattern-card">
+        <div class="card-header bg-success text-white rotation-pattern-header">
+            <h5 class="card-title mb-0">
+                <i class="bi bi-arrow-repeat"></i> Rotation Pattern
+            </h5>
+        </div>
+        <div class="card-body">
+            {% if rotation %}
+                <form method="post" action="/standby/roster/update_rotation" id="rotationForm">
+                    <div class="rotation-list mb-3" id="rotationList">
+                        {% for person in rotation %}
+                            <div class="rotation-item" data-person="{{ person }}" draggable="true">
+                                <div class="rotation-number">{{ loop.index }}</div>
+                                <div class="rotation-name">{{ person }}</div>
+                                <div class="rotation-actions">
+                                    <button type="button" class="rotation-action-btn move-up" 
+                                            onclick="movePersonByName('{{ person|e }}', 'up')" 
+                                            {% if loop.first %}disabled{% endif %} 
+                                            title="Move {{ person }} up">
+                                        <i class="bi bi-arrow-up"></i>
+                                    </button>
+                                    <button type="button" class="rotation-action-btn move-down" 
+                                            onclick="movePersonByName('{{ person|e }}', 'down')" 
+                                            {% if loop.last %}disabled{% endif %} 
+                                            title="Move {{ person }} down">
+                                        <i class="bi bi-arrow-down"></i>
+                                    </button>
+                                    <button type="button" class="rotation-action-btn remove" 
+                                            onclick="removePerson('{{ person|e }}')" 
+                                            title="Remove {{ person }} from rotation">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </div>
+                                <input type="hidden" name="rotation[]" value="{{ person }}">
+                            </div>
+                        {% endfor %}
+                    </div>
+                    
+                    <!-- Rotation Info Section -->
+                    {% if duration_config and duration_config.rotation_start_date %}
+                        {% set is_future = duration_config.rotation_start_date > today_date %}
+                        
+                        <div class="rotation-info mb-3 p-3 rounded" 
+                             style="background-color: {% if is_future %}#e3f2fd{% else %}#f3e5f5{% endif %}; border-left: 4px solid {% if is_future %}#2196f3{% else %}#9c27b0{% endif %};">
+                            <div class="d-flex align-items-center">
+                                <i class="bi bi-{% if is_future %}calendar-event{% else %}calendar-check{% endif %} me-2" 
+                                   style="color: {% if is_future %}#2196f3{% else %}#9c27b0{% endif %};"></i>
+                                <div>
+                                    <small class="fw-medium d-block">
+                                        Rotation Start: {{ duration_config.rotation_start_date.strftime('%B %d, %Y') }}
+                                    </small>
+                                    <small class="text-muted">
+                                        {% if is_future %}
+                                            📅 Changes will update calendar only until {{ duration_config.rotation_start_date.strftime('%B %d, %Y') }}
+                                        {% else %}
+                                            📅📊 Changes will update both calendar and dashboard immediately
+                                        {% endif %}
+                                    </small>
+                                </div>
+                            </div>
+                        </div>
+                    {% endif %}
+                    
+                    <button type="submit" name="save" value="1" class="btn btn-success w-100 save-rotation-btn" id="saveRotationBtn">
+                        <i class="bi bi-check-circle"></i> Save Changes
+                    </button>
+                </form>
+            {% else %}
+                <div class="text-center py-4">
+                    <i class="bi bi-arrow-repeat text-muted fs-1 mb-3"></i>
+                    <p class="text-muted mb-3">No rotation pattern set</p>
+                    <p class="small text-muted">Add team members to rotation to get started</p>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+{% endmacro %} 

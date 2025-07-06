@@ -1,0 +1,167 @@
+{% macro render_member_table(team_members, rotation) %}
+    <div class="card shadow-sm h-100">
+        <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+            <h5 class="card-title mb-0">
+                <i class="bi bi-people"></i> Team Members ({{ team_members|length }})
+            </h5>
+            <span class="badge bg-light text-primary">{{ team_members|selectattr('active')|list|length }} Active</span>
+        </div>
+        <div class="card-body p-0">
+            {% if team_members %}
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0 align-middle member-table">
+                        <thead class="table-light">
+                            <tr>
+                                <th scope="col" class="ps-3">Name</th>
+                                <th scope="col">Color</th>
+                                <th scope="col">Status</th>
+                                <th scope="col" class="text-center">Rotation</th>
+                                <th scope="col" class="text-center pe-3">
+                                    <i class="bi bi-gear-fill"></i>
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for member in team_members %}
+                            <tr class="member-row" data-member="{{ member.name }}">
+                                <td class="ps-3">
+                                    <div class="d-flex align-items-center">
+                                        <div class="color-indicator me-3" style="background-color: {{ member.color|e }}"></div>
+                                        <span class="fw-medium">{{ member.name }}</span>
+                                    </div>
+                                </td>
+                                <td>
+                                    <code class="text-muted">{{ member.color }}</code>
+                                </td>
+                                <td>
+                                    <form method="post" action="{{ url_for('standby.toggle_member') }}" class="d-inline">
+                                        <input type="hidden" name="name" value="{{ member.name }}">
+                                        <button type="submit" class="btn btn-sm status-toggle {{ 'btn-success' if member.active else 'btn-outline-secondary' }}" 
+                                                aria-label="{{ 'Deactivate' if member.active else 'Activate' }} {{ member.name }}"
+                                                title="{{ 'Deactivate' if member.active else 'Activate' }} {{ member.name }}">
+                                            <i class="bi bi-{{ 'check-circle-fill' if member.active else 'x-circle' }}"></i>
+                                            <span class="ms-1">{{ 'Active' if member.active else 'Inactive' }}</span>
+                                        </button>
+                                    </form>
+                                </td>
+                                <td class="text-center">
+                                    {% if member.name in rotation %}
+                                        <div class="rotation-toggle-container">
+                                            <div class="form-check form-switch d-inline-block">
+                                                <input class="form-check-input rotation-toggle" type="checkbox" 
+                                                       id="rotation_{{ member.name|replace(' ', '_') }}" 
+                                                       data-member="{{ member.name }}" 
+                                                       checked>
+                                                <label class="form-check-label fw-medium text-success" for="rotation_{{ member.name|replace(' ', '_') }}">
+                                                    <i class="bi bi-arrow-repeat"></i> In Rotation
+                                                </label>
+                                            </div>
+                                        </div>
+                                    {% else %}
+                                        <div class="rotation-toggle-container">
+                                            <div class="form-check form-switch d-inline-block">
+                                                <input class="form-check-input rotation-toggle" type="checkbox" 
+                                                       id="rotation_{{ member.name|replace(' ', '_') }}" 
+                                                       data-member="{{ member.name }}">
+                                                <label class="form-check-label text-muted" for="rotation_{{ member.name|replace(' ', '_') }}">
+                                                    Not in Rotation
+                                                </label>
+                                            </div>
+                                        </div>
+                                    {% endif %}
+                                </td>
+                                <td class="text-center pe-3">
+                                    <form method="post" action="{{ url_for('standby.remove_member') }}" class="d-inline remove-member-form" onsubmit="return confirm('Are you sure you want to remove {{ member.name }} from the team?');">
+                                        <input type="hidden" name="name" value="{{ member.name }}">
+                                        <button type="submit" class="btn btn-sm btn-outline-danger action-btn" title="Remove {{ member.name }} from team">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </form>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <div class="text-center py-5">
+                    <i class="bi bi-people text-muted fs-1 mb-3"></i>
+                    <p class="text-muted mb-3">No team members yet</p>
+                    <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addMemberModal">
+                        <i class="bi bi-person-plus"></i> Add First Member
+                    </button>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Initialize rotation toggles
+        const rotationToggles = document.querySelectorAll('.rotation-toggle');
+        
+        rotationToggles.forEach(toggle => {
+            toggle.addEventListener('change', function() {
+                const memberName = this.getAttribute('data-member');
+                const isChecked = this.checked;
+                
+                // Send AJAX request to toggle rotation
+                const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+                fetch('{{ url_for("standby.toggle_rotation") }}', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                        'X-CSRFToken': csrfToken
+                    },
+                    body: `name=${encodeURIComponent(memberName)}&add_to_rotation=${isChecked}`
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        // Update the label text and styling
+                        const label = this.nextElementSibling;
+                        if (isChecked) {
+                            label.innerHTML = '<i class="bi bi-arrow-repeat"></i> In Rotation';
+                            label.className = 'form-check-label fw-medium text-success';
+                        } else {
+                            label.textContent = 'Not in Rotation';
+                            label.className = 'form-check-label text-muted';
+                        }
+                        
+                        // Show success message
+                        if (typeof showToast === 'function') {
+                            showToast('Success', data.message, 'success');
+                        } else {
+                            // Fallback to alert if showToast is not available
+                            alert(data.message);
+                        }
+                        
+                        // Reload the page to update the rotation pattern
+                        setTimeout(() => {
+                            window.location.reload();
+                        }, 1000);
+                    } else {
+                        // Revert the toggle if the request failed
+                        this.checked = !isChecked;
+                        if (typeof showToast === 'function') {
+                            showToast('Error', data.message, 'error');
+                        } else {
+                            alert('Error: ' + data.message);
+                        }
+                    }
+                })
+                .catch(error => {
+                    // Revert the toggle if the request failed
+                    this.checked = !isChecked;
+                    if (typeof showToast === 'function') {
+                        showToast('Error', 'Failed to update rotation', 'error');
+                    } else {
+                        alert('Error: Failed to update rotation');
+                    }
+                    console.error('Error:', error);
+                });
+            });
+        });
+    });
+    </script>
+{% endmacro %} 

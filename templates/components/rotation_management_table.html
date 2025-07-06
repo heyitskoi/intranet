@@ -1,0 +1,102 @@
+{% macro rotation_management_table(team_members, rotation) %}
+    <div class="card shadow-sm h-100">
+        <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+            <h5 class="card-title mb-0">
+                <i class="bi bi-people"></i> Team Members ({{ team_members|length }})
+            </h5>
+            <span class="badge bg-light text-primary">{{ team_members|selectattr('active')|list|length }} Active</span>
+        </div>
+        <div class="card-body p-0">
+            {% if team_members %}
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0 align-middle">
+                        <thead class="table-light">
+                            <tr>
+                                <th scope="col">Name</th>
+                                <th scope="col">Color</th>
+                                <th scope="col">Status</th>
+                                <th scope="col">Rotation</th>
+                                <th scope="col">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for member in team_members %}
+                            <tr>
+                                <td>
+                                    <div class="d-flex align-items-center">
+                                        <div class="color-indicator me-2" style="background-color: {{ member.color|e }}"></div>
+                                        <span class="fw-medium">{{ member.name }}</span>
+                                    </div>
+                                </td>
+                                <td>
+                                    <code class="text-muted">{{ member.color }}</code>
+                                </td>
+                                <td>
+                                    <form method="post" action="{{ url_for('standby.toggle_member') }}" class="d-inline">
+                                        <input type="hidden" name="name" value="{{ member.name }}">
+                                        <button type="submit" class="btn btn-sm {{ 'btn-success' if member.active else 'btn-secondary' }}" 
+                                                aria-label="{{ 'Deactivate' if member.active else 'Activate' }} {{ member.name }}">
+                                            <i class="bi bi-{{ 'check-circle' if member.active else 'x-circle' }}"></i>
+                                            {{ 'Active' if member.active else 'Inactive' }}
+                                        </button>
+                                    </form>
+                                </td>
+                                <td>
+                                    {% if member.name in rotation %}
+                                        <span class="badge bg-success">
+                                            <i class="bi bi-arrow-repeat"></i> In Rotation
+                                        </span>
+                                    {% else %}
+                                        <span class="badge bg-light text-muted">Not in Rotation</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <div class="btn-group btn-group-sm" role="group">
+                                        {% if member.active and member.name not in rotation %}
+                                        <form method="post" action="{{ url_for('standby.update_rotation') }}" class="d-inline">
+                                            {% for p in rotation %}
+                                                <input type="hidden" name="rotation[]" value="{{ p }}">
+                                            {% endfor %}
+                                            <button type="submit" name="add" value="{{ member.name }}" 
+                                                    class="btn btn-outline-success" title="Add to rotation">
+                                                <i class="bi bi-plus-circle"></i>
+                                            </button>
+                                        </form>
+                                        {% endif %}
+                                        {% if member.active and member.name in rotation %}
+                                        <form method="post" action="{{ url_for('standby.update_rotation') }}" class="d-inline">
+                                            {% for p in rotation %}
+                                                {% if p != member.name %}
+                                                    <input type="hidden" name="rotation[]" value="{{ p }}">
+                                                {% endif %}
+                                            {% endfor %}
+                                            <button type="submit" name="remove" value="{{ member.name }}" 
+                                                    class="btn btn-outline-danger" title="Remove from rotation">
+                                                <i class="bi bi-dash-circle"></i>
+                                            </button>
+                                        </form>
+                                        {% endif %}
+                                        <button type="button" class="btn btn-outline-primary" 
+                                                onclick="editMember('{{ member.name|e }}', '{{ member.color|e }}', {{ member.active|lower }})"
+                                                title="Edit member">
+                                            <i class="bi bi-pencil"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <div class="text-center py-5">
+                    <i class="bi bi-people text-muted fs-1 mb-3"></i>
+                    <p class="text-muted mb-3">No team members yet</p>
+                    <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addMemberModal">
+                        <i class="bi bi-person-plus"></i> Add First Member
+                    </button>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+{% endmacro %} 

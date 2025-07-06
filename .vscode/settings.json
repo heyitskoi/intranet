@@ -1,0 +1,12 @@
+{
+    "sqltools.connections": [
+        {
+            "previewLimit": 50,
+            "driver": "SQLite",
+            "name": "errol",
+            "group": "errol",
+            "database": "\\\\wsl.localhost\\Ubuntu\\home\\koi\\intranet"
+        }
+    ],
+    "sqltools.useNodeRuntime": true
+}

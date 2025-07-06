@@ -2,249 +2,507 @@
 
 {% block title %}Roster | Standby Overtime App{% endblock %}
 
+{% block extra_css %}
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com"></script>
+<!-- Sortable.js for drag and drop -->
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+<!-- Bootstrap Icons -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+<style>
+    /* Custom toggle switch styles */
+    .toggle-switch {
+        position: relative;
+        display: inline-block;
+        width: 60px;
+        height: 34px;
+    }
+    
+    .toggle-switch input {
+        opacity: 0;
+        width: 0;
+        height: 0;
+    }
+    
+    .toggle-slider {
+        position: absolute;
+        cursor: pointer;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-color: #ccc;
+        transition: .4s;
+        border-radius: 34px;
+    }
+    
+    .toggle-slider:before {
+        position: absolute;
+        content: "";
+        height: 26px;
+        width: 26px;
+        left: 4px;
+        bottom: 4px;
+        background-color: white;
+        transition: .4s;
+        border-radius: 50%;
+    }
+    
+    input:checked + .toggle-slider {
+        background-color: #10b981;
+    }
+    
+    input:checked + .toggle-slider:before {
+        transform: translateX(26px);
+    }
+    
+    /* Toast notifications */
+    .toast {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        z-index: 9999;
+        max-width: 350px;
+        background: white;
+        border-radius: 8px;
+        box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+        transform: translateX(400px);
+        transition: transform 0.3s ease;
+    }
+    
+    .toast.show {
+        transform: translateX(0);
+    }
+    
+    .toast.success {
+        border-left: 4px solid #10b981;
+    }
+    
+    .toast.error {
+        border-left: 4px solid #ef4444;
+    }
+    
+    /* Drag and drop styles */
+    .sortable-ghost {
+        opacity: 0.5;
+        background: #f3f4f6;
+    }
+    
+    .sortable-chosen {
+        background: #e5e7eb;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    }
+    
+    /* Loading spinner */
+    .spinner {
+        display: inline-block;
+        width: 20px;
+        height: 20px;
+        border: 3px solid #f3f3f3;
+        border-top: 3px solid #3498db;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+    }
+    
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+    
+    /* Responsive design */
+    @media (max-width: 768px) {
+        .btn-group {
+            flex-direction: column;
+        }
+        
+        .btn-group .btn {
+            margin-bottom: 0.25rem;
+        }
+    }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="container-fluid">
-    <!-- Page Header with Breadcrumb -->
-    <nav aria-label="breadcrumb" class="mb-3">
-        <ol class="breadcrumb">
-            <li class="breadcrumb-item"><a href="/dashboard">Dashboard</a></li>
-            <li class="breadcrumb-item active" aria-current="page">Roster Management</li>
-        </ol>
-    </nav>
+<div class="min-h-screen bg-gray-50">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- Page Header with Breadcrumb -->
+        <nav class="flex mb-6" aria-label="Breadcrumb">
+            <ol class="inline-flex items-center space-x-1 md:space-x-3">
+                <li class="inline-flex items-center">
+                    <a href="/dashboard" class="inline-flex items-center text-sm font-medium text-gray-700 hover:text-blue-600">
+                        <i class="bi bi-house-door mr-2"></i>
+                        Dashboard
+                    </a>
+                </li>
+                <li>
+                    <div class="flex items-center">
+                        <i class="bi bi-chevron-right text-gray-400 mx-2"></i>
+                        <span class="text-sm font-medium text-gray-500">Roster Management</span>
+                    </div>
+                </li>
+            </ol>
+        </nav>
 
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <div>
-            <h2 class="mb-1">Manage Team Roster</h2>
-            <p class="text-muted mb-0">Add team members, manage rotation, and set date overrides</p>
+        <!-- Header Section -->
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-8">
+            <div class="mb-4 sm:mb-0">
+                <h1 class="text-3xl font-bold text-gray-900 mb-2">Manage Team Roster</h1>
+                <p class="text-gray-600">Add team members, manage rotation, and set date overrides</p>
+            </div>
+            <div class="flex flex-col sm:flex-row gap-3">
+                <button type="button" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200" data-bs-toggle="modal" data-bs-target="#addMemberModal">
+                    <i class="bi bi-person-plus mr-2"></i>
+                    Add Member
+                </button>
+                <button type="button" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg text-white bg-amber-600 hover:bg-amber-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500 transition-colors duration-200" data-bs-toggle="modal" data-bs-target="#addOverrideModal">
+                    <i class="bi bi-calendar-plus mr-2"></i>
+                    Add Override
+                </button>
+                {% if is_admin %}
+                <a href="{{ url_for('standby.duration_config') }}" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 transition-colors duration-200">
+                    <i class="bi bi-gear-wide-connected mr-2"></i>
+                    Configure Settings
+                </a>
+                {% endif %}
+            </div>
         </div>
-        <div class="btn-group" role="group" aria-label="Quick actions">
-            <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#addMemberModal">
-                <i class="bi bi-person-plus"></i> Add Member
-            </button>
-            <button type="button" class="btn btn-outline-warning" data-bs-toggle="modal" data-bs-target="#addOverrideModal">
-                <i class="bi bi-calendar-plus"></i> Add Override
-            </button>
-        </div>
-    </div>
 
-    <!-- Flash Messages -->
-    {% with messages = get_flashed_messages(with_categories=true) %}
-        {% if messages %}
-            {% for category, message in messages %}
-                <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show" role="alert">
-                    <i class="bi bi-{{ 'exclamation-triangle' if category == 'error' else 'check-circle' }} me-2"></i>
-                    {{ message }}
-                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                </div>
-            {% endfor %}
-        {% endif %}
-    {% endwith %}
+        <!-- Flash Messages -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="mb-6 p-4 rounded-lg border-l-4 {% if category == 'error' %}bg-red-50 border-red-400 text-red-700{% elif category == 'success' %}bg-green-50 border-green-400 text-green-700{% else %}bg-blue-50 border-blue-400 text-blue-700{% endif %}">
+                        <div class="flex">
+                            <div class="flex-shrink-0">
+                                <i class="bi bi-{% if category == 'error' %}exclamation-triangle{% else %}check-circle{% endif %}"></i>
+                            </div>
+                            <div class="ml-3">
+                                <p class="text-sm font-medium">{{ message }}</p>
+                            </div>
+                            <div class="ml-auto pl-3">
+                                <div class="-mx-1.5 -my-1.5">
+                                    <button type="button" class="inline-flex rounded-md p-1.5 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2" onclick="this.parentElement.parentElement.parentElement.parentElement.remove()">
+                                        <i class="bi bi-x text-lg"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
 
-    <div class="row g-4">
-        <!-- Team Members Table -->
-        <div class="col-lg-8">
-            <div class="card shadow-sm h-100">
-                <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
-                    <h5 class="card-title mb-0">
-                        <i class="bi bi-people"></i> Team Members ({{ team_members|length }})
-                    </h5>
-                    <span class="badge bg-light text-primary">{{ team_members|selectattr('active')|list|length }} Active</span>
-                </div>
-                <div class="card-body p-0">
-                    {% if team_members %}
-                        <div class="table-responsive">
-                            <table class="table table-hover mb-0 align-middle">
-                                <thead class="table-light">
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <!-- Team Members Table -->
+            <div class="lg:col-span-2">
+                <div class="bg-white overflow-hidden shadow rounded-lg">
+                    <div class="px-6 py-4 bg-gradient-to-r from-blue-600 to-blue-700">
+                        <div class="flex items-center justify-between">
+                            <h3 class="text-lg font-semibold text-white flex items-center">
+                                <i class="bi bi-people mr-2"></i>
+                                Team Members ({{ team_members|length }})
+                            </h3>
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                {{ team_members|selectattr('active')|list|length }} Active
+                            </span>
+                        </div>
+                    </div>
+                    <div class="overflow-x-auto">
+                        {% if team_members %}
+                            <table class="min-w-full divide-y divide-gray-200">
+                                <thead class="bg-gray-50">
                                     <tr>
-                                        <th scope="col">Name</th>
-                                        <th scope="col">Color</th>
-                                        <th scope="col">Status</th>
-                                        <th scope="col">Rotation</th>
-                                        <th scope="col">Actions</th>
+                                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+                                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Color</th>
+                                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Rotation</th>
+                                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                                     </tr>
                                 </thead>
-                                <tbody>
+                                <tbody class="bg-white divide-y divide-gray-200">
                                     {% for member in team_members %}
-                                    <tr>
-                                        <td>
-                                            <div class="d-flex align-items-center">
-                                                <div class="color-indicator me-2" style="background-color: {{ member.color }}"></div>
-                                                <span class="fw-medium">{{ member.name }}</span>
+                                    <tr class="hover:bg-gray-50 transition-colors duration-150">
+                                        <td class="px-6 py-4 whitespace-nowrap">
+                                            <div class="flex items-center">
+                                                <div class="w-4 h-4 rounded mr-3 border border-gray-300" style="background-color: {{ member.color }}"></div>
+                                                <div class="text-sm font-medium text-gray-900">{{ member.name }}</div>
                                             </div>
                                         </td>
-                                        <td>
-                                            <code class="text-muted">{{ member.color }}</code>
+                                        <td class="px-6 py-4 whitespace-nowrap">
+                                            <code class="text-sm text-gray-500">{{ member.color }}</code>
                                         </td>
-                                        <td>
-                                            <form method="post" action="/roster/toggle_member" class="d-inline">
+                                        <td class="px-6 py-4 whitespace-nowrap">
+                                            <form method="post" action="{{ url_for('standby.toggle_member') }}" class="inline">
                                                 <input type="hidden" name="name" value="{{ member.name }}">
-                                                <button type="submit" class="btn btn-sm {{ 'btn-success' if member.active else 'btn-secondary' }}" 
-                                                        aria-label="{{ 'Deactivate' if member.active else 'Activate' }} {{ member.name }}">
-                                                    <i class="bi bi-{{ 'check-circle' if member.active else 'x-circle' }}"></i>
+                                                <button type="submit" class="inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded-full {% if member.active %}bg-green-100 text-green-800 hover:bg-green-200{% else %}bg-gray-100 text-gray-800 hover:bg-gray-200{% endif %} transition-colors duration-200" aria-label="{{ 'Deactivate' if member.active else 'Activate' }} {{ member.name }}">
+                                                    <i class="bi bi-{% if member.active %}check-circle{% else %}x-circle{% endif %} mr-1"></i>
                                                     {{ 'Active' if member.active else 'Inactive' }}
                                                 </button>
                                             </form>
                                         </td>
-                                        <td>
-                                            {% if member.name in rotation %}
-                                                <span class="badge bg-success">
-                                                    <i class="bi bi-arrow-repeat"></i> In Rotation
-                                                </span>
-                                            {% else %}
-                                                <span class="badge bg-light text-muted">Not in Rotation</span>
-                                            {% endif %}
+                                        <td class="px-6 py-4 whitespace-nowrap">
+                                            <label class="toggle-switch">
+                                                <input type="checkbox" 
+                                                       class="rotation-toggle" 
+                                                       data-member="{{ member.name }}"
+                                                       {% if member.name in rotation %}checked{% endif %}
+                                                       {% if not member.active %}disabled{% endif %}>
+                                                <span class="toggle-slider"></span>
+                                            </label>
                                         </td>
-                                        <td>
-                                            <div class="btn-group btn-group-sm" role="group">
-                                                {% if member.active and member.name not in rotation %}
-                                                <form method="post" action="/roster/update_rotation" class="d-inline">
-                                                    {% for p in rotation %}
-                                                        <input type="hidden" name="rotation[]" value="{{ p }}">
-                                                    {% endfor %}
-                                                    <button type="submit" name="add" value="{{ member.name }}" 
-                                                            class="btn btn-outline-success" title="Add to rotation">
-                                                        <i class="bi bi-plus-circle"></i>
-                                                    </button>
-                                                </form>
-                                                {% endif %}
-                                                <button type="button" class="btn btn-outline-primary" 
-                                                        onclick="editMember('{{ member.name|e }}', '{{ member.color|e }}', {{ member.active|lower }})"
-                                                        title="Edit member">
-                                                    <i class="bi bi-pencil"></i>
-                                                </button>
-                                            </div>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                            <button type="button" class="text-blue-600 hover:text-blue-900 transition-colors duration-200" 
+                                                    onclick="editMember('{{ member.name|e }}', '{{ member.color|e }}', {{ member.active|lower }})"
+                                                    title="Edit member">
+                                                <i class="bi bi-pencil"></i>
+                                            </button>
                                         </td>
                                     </tr>
                                     {% endfor %}
                                 </tbody>
                             </table>
-                        </div>
-                    {% else %}
-                        <div class="text-center py-5">
-                            <i class="bi bi-people text-muted fs-1 mb-3"></i>
-                            <p class="text-muted mb-3">No team members yet</p>
-                            <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addMemberModal">
-                                <i class="bi bi-person-plus"></i> Add First Member
-                            </button>
-                        </div>
-                    {% endif %}
-                </div>
-            </div>
-        </div>
-
-        <!-- Rotation Pattern -->
-        <div class="col-lg-4">
-            <div class="card shadow-sm h-100">
-                <div class="card-header bg-success text-white">
-                    <h5 class="card-title mb-0">
-                        <i class="bi bi-arrow-repeat"></i> Rotation Pattern
-                    </h5>
-                </div>
-                <div class="card-body">
-                    {% if rotation %}
-                        <form method="post" action="/roster/update_rotation" id="rotationForm">
-                            <div class="list-group mb-3" id="rotationList">
-                                {% for person in rotation %}
-                                    <div class="list-group-item d-flex justify-content-between align-items-center" data-person="{{ person }}">
-                                        <div class="d-flex align-items-center">
-                                            <span class="badge bg-secondary me-2">{{ loop.index }}</span>
-                                            <span>{{ person }}</span>
-                                        </div>
-                                        <div class="btn-group btn-group-sm" role="group">
-                                            <button type="button" class="btn btn-outline-primary btn-sm" 
-                                                    onclick="movePersonByName('{{ person|e }}', 'up')" 
-                                                    {% if loop.first %}disabled{% endif %} title="Move up">
-                                                <i class="bi bi-arrow-up"></i>
-                                            </button>
-                                            <button type="button" class="btn btn-outline-primary btn-sm" 
-                                                    onclick="movePersonByName('{{ person|e }}', 'down')" 
-                                                    {% if loop.last %}disabled{% endif %} title="Move down">
-                                                <i class="bi bi-arrow-down"></i>
-                                            </button>
-                                            <button type="button" class="btn btn-outline-danger btn-sm" 
-                                                    onclick="removePerson('{{ person|e }}')" title="Remove">
-                                                <i class="bi bi-trash"></i>
-                                            </button>
-                                        </div>
-                                        <input type="hidden" name="rotation[]" value="{{ person }}">
-                                    </div>
-                                {% endfor %}
+                        {% else %}
+                            <div class="text-center py-12">
+                                <i class="bi bi-people text-6xl text-gray-300 mb-4"></i>
+                                <p class="text-gray-500 mb-4">No team members yet</p>
+                                <button type="button" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200" data-bs-toggle="modal" data-bs-target="#addMemberModal">
+                                    <i class="bi bi-person-plus mr-2"></i>
+                                    Add First Member
+                                </button>
                             </div>
-                            <button type="submit" name="save" value="1" class="btn btn-success w-100">
-                                <i class="bi bi-check-circle"></i> Save Changes
-                            </button>
-                        </form>
-                    {% else %}
-                        <div class="text-center py-4">
-                            <i class="bi bi-arrow-repeat text-muted fs-1 mb-3"></i>
-                            <p class="text-muted mb-3">No rotation pattern set</p>
-                            <p class="small text-muted">Add team members to rotation to get started</p>
-                        </div>
-                    {% endif %}
+                        {% endif %}
+                    </div>
                 </div>
             </div>
-        </div>
-    </div>
 
-    <!-- Date Overrides Section -->
-    {% if overrides %}
-    <div class="row mt-4">
-        <div class="col-12">
-            <div class="card shadow-sm">
-                <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
-                    <h5 class="card-title mb-0">
-                        <i class="bi bi-calendar-event"></i> Date Overrides ({{ overrides|length }})
-                    </h5>
-                    <button type="button" class="btn btn-light btn-sm" data-bs-toggle="modal" data-bs-target="#addOverrideModal">
-                        <i class="bi bi-plus-circle"></i> Add Override
-                    </button>
-                </div>
-                <div class="card-body p-0">
-                    <div class="table-responsive">
-                        <table class="table table-hover mb-0 align-middle">
-                            <thead class="table-light">
-                                <tr>
-                                    <th scope="col">Date</th>
-                                    <th scope="col">Person</th>
-                                    <th scope="col">Type</th>
-                                    <th scope="col">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for date, person in overrides.items() %}
-                                <tr>
-                                    <td>
-                                        <div class="d-flex align-items-center">
-                                            <i class="bi bi-calendar-check text-success me-2"></i>
-                                            <span class="fw-medium">{{ date }}</span>
-                                        </div>
-                                    </td>
-                                    <td>
-                                        <span class="badge bg-info">{{ person }}</span>
-                                    </td>
-                                    <td>
-                                        <span class="badge bg-warning text-dark">Override</span>
-                                    </td>
-                                    <td>
-                                        <form method="post" action="/roster/remove_override" class="d-inline">
-                                            <input type="hidden" name="date" value="{{ date }}">
-                                            <button type="submit" class="btn btn-sm btn-outline-danger" 
-                                                    onclick="return confirm('Remove override for {{ date }}?')"
-                                                    title="Remove override">
+            <!-- Rotation Pattern -->
+            <div class="lg:col-span-1">
+                <div class="bg-white overflow-hidden shadow rounded-lg h-fit">
+                    <div class="px-6 py-4 bg-gradient-to-r from-green-600 to-green-700">
+                        <h3 class="text-lg font-semibold text-white flex items-center">
+                            <i class="bi bi-arrow-repeat mr-2"></i>
+                            Rotation Pattern
+                        </h3>
+                    </div>
+                    <div class="p-6">
+                        {% if rotation %}
+                            <div class="space-y-3 mb-6">
+                                <div id="rotationList" class="space-y-2">
+                                    {% for person in rotation %}
+                                        <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200 cursor-move" data-person="{{ person }}">
+                                            <div class="flex items-center">
+                                                <span class="inline-flex items-center justify-center w-6 h-6 text-xs font-medium text-white bg-gray-500 rounded-full mr-3">{{ loop.index }}</span>
+                                                <span class="text-sm font-medium text-gray-900">{{ person }}</span>
+                                            </div>
+                                            <button type="button" class="text-red-500 hover:text-red-700 transition-colors duration-200" 
+                                                    onclick="removePerson('{{ person|e }}')" 
+                                                    title="Remove from rotation">
                                                 <i class="bi bi-trash"></i>
                                             </button>
-                                        </form>
-                                    </td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
+                                        </div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                            
+                            <!-- Rotation Info Section -->
+                            {% if duration_config and duration_config.rotation_start_date %}
+                                {% set is_future = duration_config.rotation_start_date > today_date %}
+                                
+                                <div class="mb-4 p-3 rounded-lg border-l-4" 
+                                     style="background-color: {% if is_future %}#eff6ff{% else %}#fdf4ff{% endif %}; border-color: {% if is_future %}#3b82f6{% else %}#a855f7{% endif %};">
+                                    <div class="flex items-center">
+                                        <i class="bi bi-{% if is_future %}calendar-event{% else %}calendar-check{% endif %} mr-2" 
+                                           style="color: {% if is_future %}#3b82f6{% else %}#a855f7{% endif %};"></i>
+                                        <div>
+                                            <p class="text-sm font-medium text-gray-900">
+                                                Rotation Start: {{ duration_config.rotation_start_date.strftime('%B %d, %Y') }}
+                                            </p>
+                                            <p class="text-xs text-gray-600">
+                                                {% if is_future %}
+                                                    📅 Changes will update calendar only until {{ duration_config.rotation_start_date.strftime('%B %d, %Y') }}
+                                                {% else %}
+                                                    📅📊 Changes will update both calendar and dashboard immediately
+                                                {% endif %}
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            {% endif %}
+                            
+                            <button type="button" id="saveRotationBtn" class="w-full inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                                <i class="bi bi-check-circle mr-2"></i>
+                                <span class="btn-text">Save Changes</span>
+                                <span class="spinner ml-2 hidden"></span>
+                            </button>
+                            
+                            <!-- Upcoming Rotation Panel -->
+                            <div id="upcomingRotationPanel" style="display:none;"></div>
+                        {% else %}
+                            <div class="text-center py-8">
+                                <i class="bi bi-arrow-repeat text-6xl text-gray-300 mb-4"></i>
+                                <p class="text-gray-500 mb-2">No rotation pattern set</p>
+                                <p class="text-sm text-gray-400">Add team members to rotation to get started</p>
+                            </div>
+                        {% endif %}
                     </div>
                 </div>
             </div>
         </div>
+
+        <!-- Date Overrides Section -->
+        {% if overrides %}
+        <div class="mt-8">
+            <div class="bg-white overflow-hidden shadow rounded-lg">
+                <div class="px-6 py-4 bg-gradient-to-r from-cyan-600 to-cyan-700">
+                    <div class="flex items-center justify-between">
+                        <h3 class="text-lg font-semibold text-white flex items-center">
+                            <i class="bi bi-calendar-event mr-2"></i>
+                            Date Overrides ({{ overrides|length }})
+                        </h3>
+                        <button type="button" class="inline-flex items-center px-3 py-1 border border-transparent text-sm font-medium rounded-lg text-cyan-700 bg-cyan-100 hover:bg-cyan-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-cyan-500 transition-colors duration-200" data-bs-toggle="modal" data-bs-target="#addOverrideModal">
+                            <i class="bi bi-plus-circle mr-1"></i>
+                            Add Override
+                        </button>
+                    </div>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Person</th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white divide-y divide-gray-200">
+                            {% for date, person in overrides.items() %}
+                            <tr class="hover:bg-gray-50 transition-colors duration-150">
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    <div class="flex items-center">
+                                        <i class="bi bi-calendar-check text-green-500 mr-2"></i>
+                                        <span class="text-sm font-medium text-gray-900">{{ date }}</span>
+                                    </div>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-cyan-100 text-cyan-800">{{ person }}</span>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">Override</span>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                    <form method="post" action="{{ url_for('standby.remove_override_route') }}" class="inline">
+                                        <input type="hidden" name="date" value="{{ date }}">
+                                        <button type="submit" class="text-red-600 hover:text-red-900 transition-colors duration-200" 
+                                                onclick="return confirm('Remove override for {{ date }}?')"
+                                                title="Remove override">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </form>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Duration Configuration Section (Admin Only) -->
+        {% if is_admin %}
+        <div class="mt-8">
+            <div class="bg-white overflow-hidden shadow rounded-lg">
+                <div class="px-6 py-4 bg-gradient-to-r from-purple-600 to-purple-700">
+                    <div class="flex items-center justify-between">
+                        <h3 class="text-lg font-semibold text-white flex items-center">
+                            <i class="bi bi-gear-wide-connected mr-2"></i>
+                            Department Configuration
+                        </h3>
+                        <a href="{{ url_for('standby.duration_config') }}" class="inline-flex items-center px-3 py-1 border border-transparent text-sm font-medium rounded-lg text-purple-700 bg-purple-100 hover:bg-purple-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 transition-colors duration-200">
+                            <i class="bi bi-pencil-square mr-1"></i>
+                            Configure Settings
+                        </a>
+                    </div>
+                </div>
+                <div class="p-6">
+                    {% if duration_config %}
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                            <!-- Standby Shift Settings -->
+                            <div class="bg-gray-50 rounded-lg p-4">
+                                <h4 class="text-sm font-medium text-gray-900 mb-3 flex items-center">
+                                    <i class="bi bi-calendar-check text-blue-500 mr-2"></i>
+                                    Standby Shift Settings
+                                </h4>
+                                <div class="space-y-2 text-sm">
+                                    <div class="flex justify-between">
+                                        <span class="text-gray-600">Shift Length:</span>
+                                        <span class="font-medium">{{ duration_config.standby_shift_days }} day{{ 's' if duration_config.standby_shift_days != 1 else '' }}</span>
+                                    </div>
+                                    <div class="flex justify-between">
+                                        <span class="text-gray-600">Start Date:</span>
+                                        <span class="font-medium">{{ duration_config.rotation_start_date.strftime('%Y-%m-%d') }}</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Overtime Settings -->
+                            <div class="bg-gray-50 rounded-lg p-4">
+                                <h4 class="text-sm font-medium text-gray-900 mb-3 flex items-center">
+                                    <i class="bi bi-exclamation-triangle text-amber-500 mr-2"></i>
+                                    Overtime Settings
+                                </h4>
+                                <div class="space-y-2 text-sm">
+                                    <div class="flex justify-between">
+                                        <span class="text-gray-600">Monthly Limit:</span>
+                                        <span class="font-medium">{{ duration_config.monthly_overtime_limit }}h</span>
+                                    </div>
+                                    <div class="flex justify-between">
+                                        <span class="text-gray-600">Warning:</span>
+                                        <span class="font-medium">{{ duration_config.overtime_warning_threshold }}h</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Notification Settings -->
+                            <div class="bg-gray-50 rounded-lg p-4">
+                                <h4 class="text-sm font-medium text-gray-900 mb-3 flex items-center">
+                                    <i class="bi bi-bell text-purple-500 mr-2"></i>
+                                    Notifications
+                                </h4>
+                                <div class="space-y-2 text-sm">
+                                    <div class="flex justify-between">
+                                        <span class="text-gray-600">Refresh:</span>
+                                        <span class="font-medium">{{ duration_config.dashboard_refresh_interval }}s</span>
+                                    </div>
+                                    <div class="flex justify-between">
+                                        <span class="text-gray-600">Auto-dismiss:</span>
+                                        <span class="font-medium">{{ duration_config.notification_auto_dismiss }}s</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="mt-4 text-xs text-gray-500">
+                            <i class="bi bi-info-circle mr-1"></i>
+                            Last updated: {{ duration_config.updated_at.strftime('%Y-%m-%d %H:%M') }} by {{ duration_config.updated_by.username }}
+                        </div>
+                    {% else %}
+                        <div class="text-center py-8">
+                            <i class="bi bi-gear-wide-connected text-6xl text-gray-300 mb-4"></i>
+                            <p class="text-gray-500 mb-2">No configuration set</p>
+                            <p class="text-sm text-gray-400 mb-4">Configure standby duration settings for your department</p>
+                            <a href="{{ url_for('standby.duration_config') }}" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 transition-colors duration-200">
+                                <i class="bi bi-plus-circle mr-2"></i>
+                                Create Configuration
+                            </a>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
     </div>
-    {% endif %}
 </div>
 
 <!-- Add Member Modal -->
@@ -257,14 +515,34 @@
                 </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <form method="post" action="/roster/add_member" id="addMemberForm">
+            <form method="post" action="{{ url_for('standby.add_member') }}" id="addMemberForm">
                 <div class="modal-body">
                     <div class="mb-3">
-                        <label for="name" class="form-label">Name <span class="text-danger">*</span></label>
-                        <input type="text" class="form-control" id="name" name="name" required 
-                               pattern="[A-Za-z0-9\s\-_]+" minlength="2" maxlength="50"
-                               placeholder="Enter member name">
-                        <div class="form-text">Letters, numbers, spaces, hyphens, and underscores only</div>
+                        <label for="name" class="form-label">User <span class="text-danger">*</span></label>
+                        <select class="form-select" id="name" name="name" required>
+                            <option value="" disabled selected>Select a user</option>
+                            
+                            {% if inactive_members %}
+                                <optgroup label="Reactivate Inactive Members">
+                                    {% for member in inactive_members %}
+                                        <option value="{{ member.username }}" data-color="{{ member.color }}">
+                                            🔄 {{ member.username }} (Reactivate)
+                                        </option>
+                                    {% endfor %}
+                                </optgroup>
+                            {% endif %}
+                            
+                            {% if all_users %}
+                                <optgroup label="Add New Members">
+                                    {% for user in all_users %}
+                                        <option value="{{ user.username }}">{{ user.username }}</option>
+                                    {% endfor %}
+                                </optgroup>
+                            {% endif %}
+                        </select>
+                        <div class="form-text">
+                            Choose to reactivate an inactive member or add a new user to the standby roster
+                        </div>
                     </div>
                     <div class="mb-3">
                         <label for="color" class="form-label">Color</label>
@@ -301,7 +579,7 @@
                 </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <form method="post" action="/roster/add_override" id="addOverrideForm">
+            <form method="post" action="{{ url_for('standby.add_override_route') }}" id="addOverrideForm">
                 <div class="modal-body">
                     <div class="mb-3">
                         <label for="override_start_date" class="form-label">Start Date <span class="text-danger">*</span></label>
@@ -320,6 +598,15 @@
                             {% for member in team_members if member.active %}
                                 <option value="{{ member.name }}">{{ member.name }}</option>
                             {% endfor %}
+                            {% if all_users %}
+                                <optgroup label="Other Users">
+                                    {% for user in all_users %}
+                                        {% if not user.username in team_members|map(attribute='name')|list %}
+                                            <option value="{{ user.username }}">{{ user.username }}</option>
+                                        {% endif %}
+                                    {% endfor %}
+                                </optgroup>
+                            {% endif %}
                         </select>
                     </div>
                 </div>
@@ -344,7 +631,7 @@
                 </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <form method="post" action="/roster/edit_member" id="editMemberForm">
+            <form method="post" action="{{ url_for('standby.edit_member') }}" id="editMemberForm">
                 <div class="modal-body">
                     <input type="hidden" id="edit_name_original" name="name_original">
                     <div class="mb-3">
@@ -376,194 +663,73 @@
     </div>
 </div>
 
-<style>
-.color-indicator {
-    width: 1.5em;
-    height: 1.5em;
-    border-radius: 0.25em;
-    border: 1px solid #dee2e6;
-    display: inline-block;
-}
+<!-- Toast Container -->
+<div id="toastContainer"></div>
 
-.table th {
-    font-weight: 600;
-    border-bottom: 2px solid #dee2e6;
-}
-
-.table-hover tbody tr:hover {
-    background-color: rgba(0, 123, 255, 0.05);
-}
-
-.btn-group-sm .btn {
-    padding: 0.25rem 0.5rem;
-    font-size: 0.875rem;
-}
-
-.list-group-item {
-    border-left: none;
-    border-right: none;
-    transition: background-color 0.15s ease-in-out;
-}
-
-.list-group-item:hover {
-    background-color: #f8f9fa;
-}
-
-.badge {
-    font-weight: 500;
-}
-
-.modal-header {
-    border-bottom: 1px solid #dee2e6;
-}
-
-.modal-footer {
-    border-top: 1px solid #dee2e6;
-}
-
-.form-control-color {
-    width: 3rem;
-    height: 2.375rem;
-}
-
-/* Responsive improvements */
-@media (max-width: 768px) {
-    .btn-group {
-        flex-direction: column;
-        width: 100%;
-    }
-    
-    .btn-group .btn {
-        margin-bottom: 0.25rem;
-    }
-    
-    .table-responsive {
-        font-size: 0.875rem;
-    }
-    
-    .modal-dialog {
-        margin: 0.5rem;
-    }
-}
-
-/* Animation for list items */
-.list-group-item {
-    animation: fadeIn 0.3s ease-in-out;
-}
-
-@keyframes fadeIn {
-    from { opacity: 0; transform: translateY(-10px); }
-    to { opacity: 1; transform: translateY(0); }
-}
-
-/* Enhanced focus states */
-.form-control:focus,
-.form-select:focus {
-    border-color: #007bff;
-    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
-}
-
-.btn:focus {
-    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
-}
-
-/* --- Modern Modal Enhancements --- */
-.modal-content {
-    background: rgba(255, 255, 255, 0.85);
-    backdrop-filter: blur(16px) saturate(180%);
-    border-radius: 1.25rem;
-    box-shadow: 0 8px 32px rgba(60, 60, 120, 0.18);
-    border: 1px solid rgba(255, 255, 255, 0.25);
-    animation: modalFadeIn 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-    overflow: hidden;
-}
-@keyframes modalFadeIn {
-    from { opacity: 0; transform: translateY(40px) scale(0.98);}
-    to   { opacity: 1; transform: translateY(0) scale(1);}
-}
-.modal-header {
-    border-bottom: 1px solid #e0e7ff;
-    background: linear-gradient(90deg, #4f46e5 0%, #6d28d9 100%);
-    color: #fff;
-    border-top-left-radius: 1.25rem;
-    border-top-right-radius: 1.25rem;
-    box-shadow: 0 2px 8px rgba(79, 70, 229, 0.08);
-    padding-top: 1.25rem;
-    padding-bottom: 1.25rem;
-}
-.modal-title i {
-    margin-right: 0.5rem;
-}
-.modal-footer {
-    border-top: 1px solid #e0e7ff;
-    background: transparent;
-    border-bottom-left-radius: 1.25rem;
-    border-bottom-right-radius: 1.25rem;
-    padding-top: 1.25rem;
-    padding-bottom: 1.25rem;
-}
-.btn {
-    border-radius: 2rem;
-    font-weight: 600;
-    transition: background 0.2s, color 0.2s, box-shadow 0.2s;
-    padding-left: 1.5rem;
-    padding-right: 1.5rem;
-    letter-spacing: 0.02em;
-}
-.btn-primary, .btn-warning, .btn-secondary {
-    box-shadow: 0 2px 8px rgba(79, 70, 229, 0.08);
-}
-.btn:focus, .btn:hover {
-    filter: brightness(1.08);
-    box-shadow: 0 4px 16px rgba(79, 70, 229, 0.12);
-}
-.form-control, .form-select {
-    border-radius: 0.75rem;
-    box-shadow: none;
-    border: 1.5px solid #e0e7ff;
-    transition: border-color 0.2s, box-shadow 0.2s;
-    padding: 0.75rem 1rem;
-    font-size: 1.05rem;
-}
-.form-control:focus, .form-select:focus {
-    border-color: #4f46e5;
-    box-shadow: 0 0 0 0.15rem rgba(79, 70, 229, 0.15);
-}
-.form-label {
-    font-weight: 600;
-    color: #4f46e5;
-    letter-spacing: 0.01em;
-}
-.form-text {
-    color: #6d28d9;
-    font-size: 0.95em;
-}
-.form-check-input:focus {
-    box-shadow: 0 0 0 0.15rem rgba(79, 70, 229, 0.15);
-}
-.divider {
-    border-top: 1.5px solid #e0e7ff;
-    margin: 1.25rem 0;
-}
-/* Responsive modal width */
-@media (max-width: 768px) {
-    .modal-dialog {
-        margin: 0.5rem;
-        max-width: 98vw;
-    }
-    .modal-content {
-        border-radius: 0.75rem;
-        padding: 0.5rem;
-    }
-    .modal-header, .modal-footer {
-        border-radius: 0.75rem 0.75rem 0 0;
-        padding: 1rem;
-    }
-}
-/* --- End Modern Modal Enhancements --- */
-</style>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    // Initialize drag and drop for rotation list
+    const rotationList = document.getElementById('rotationList');
+    if (rotationList) {
+        new Sortable(rotationList, {
+            animation: 150,
+            ghostClass: 'sortable-ghost',
+            chosenClass: 'sortable-chosen',
+            onEnd: function() {
+                updateRotationNumbers();
+                markChanges();
+            }
+        });
+    }
+
+    // Initialize rotation toggles
+    const rotationToggles = document.querySelectorAll('.rotation-toggle');
+    rotationToggles.forEach(toggle => {
+        toggle.addEventListener('change', function() {
+            const memberName = this.dataset.member;
+            const isChecked = this.checked;
+            
+            // Send AJAX request to toggle rotation
+            const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+            const headers = {
+                'Content-Type': 'application/x-www-form-urlencoded'
+            };
+            if (csrfToken) {
+                headers['X-CSRFToken'] = csrfToken;
+            }
+            fetch('/standby/roster/toggle_rotation', {
+                method: 'POST',
+                headers: headers,
+                body: `name=${encodeURIComponent(memberName)}&add_to_rotation=${isChecked}`
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    if (isChecked) {
+                        addToRotation(memberName);
+                    } else {
+                        removeFromRotation(memberName);
+                    }
+                    showToast(data.message, 'success');
+                    // Show notification about calendar refresh
+                    setTimeout(() => {
+                        showToast('Info', 'Calendar assignments have been updated. You may need to refresh the calendar page to see changes.', 'info');
+                    }, 1000);
+                } else {
+                    // Revert the toggle if the request failed
+                    this.checked = !isChecked;
+                    showToast(data.message, 'error');
+                }
+            })
+            .catch(error => {
+                // Revert the toggle if the request failed
+                this.checked = !isChecked;
+                showToast('Failed to update rotation', 'error');
+                console.error('Error:', error);
+            });
+        });
+    });
+
     // Color picker synchronization
     const colorInputs = document.querySelectorAll('input[type="color"]');
     const colorTextInputs = document.querySelectorAll('input[type="text"][pattern*="[0-9A-Fa-f]{6}"]');
@@ -614,66 +780,303 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // Auto-dismiss alerts
-    const alerts = document.querySelectorAll('.alert');
-    alerts.forEach(alert => {
-        setTimeout(() => {
-            const bsAlert = new bootstrap.Alert(alert);
-            bsAlert.close();
-        }, 5000);
-    });
-
-    // Enhanced table interactions
-    const tableRows = document.querySelectorAll('tbody tr');
-    tableRows.forEach(row => {
-        row.addEventListener('click', function(e) {
-            if (!e.target.closest('button') && !e.target.closest('a')) {
-                this.classList.toggle('table-active');
+    // Handle reactivation color selection
+    const nameSelect = document.getElementById('name');
+    const colorInput = document.getElementById('color');
+    const colorTextInput = document.getElementById('colorText');
+    
+    if (nameSelect && colorInput && colorTextInput) {
+        nameSelect.addEventListener('change', function() {
+            const selectedOption = this.options[this.selectedIndex];
+            const color = selectedOption.getAttribute('data-color');
+            if (color) {
+                colorInput.value = color;
+                colorTextInput.value = color;
             }
         });
+    }
+
+    // Save rotation button - show modal instead of direct save
+    const saveBtn = document.getElementById('saveRotationBtn');
+    if (saveBtn) {
+        saveBtn.addEventListener('click', function() {
+            // Show the modal
+            var modal = new bootstrap.Modal(document.getElementById('rotationApplyModeModal'));
+            modal.show();
+        });
+    }
+
+    // Handle modal confirmation
+    document.getElementById('confirmApplyModeBtn').addEventListener('click', function() {
+        // Get selected apply mode
+        const applyMode = document.querySelector('input[name="applyMode"]:checked').value;
+        // Hide modal
+        var modalEl = document.getElementById('rotationApplyModeModal');
+        var modal = bootstrap.Modal.getInstance(modalEl);
+        modal.hide();
+        // Call the real save function with the selected mode
+        saveRotation(applyMode);
     });
+
+    // Load upcoming rotation panel
+    loadUpcomingRotationPanel();
 });
 
-// Global functions for rotation management
-function movePerson(index, direction) {
-    const list = document.getElementById('rotationList');
-    const items = Array.from(list.querySelectorAll('.list-group-item'));
-    if (direction === 'up' && index > 0) {
-        list.insertBefore(items[index], items[index - 1]);
-    } else if (direction === 'down' && index < items.length - 1) {
-        list.insertBefore(items[index + 1], items[index]);
+// Global state for tracking changes
+let hasChanges = false;
+let originalRotation = [];
+
+// Initialize original rotation state
+document.addEventListener('DOMContentLoaded', function() {
+    const rotationItems = document.querySelectorAll('#rotationList [data-person]');
+    originalRotation = Array.from(rotationItems).map(item => item.dataset.person);
+});
+
+function markChanges() {
+    hasChanges = true;
+    const saveBtn = document.getElementById('saveRotationBtn');
+    if (saveBtn) {
+        saveBtn.disabled = false;
     }
-    updateRotationNumbers();
 }
 
-// New function to move by person name
-function movePersonByName(person, direction) {
-    const list = document.getElementById('rotationList');
-    const items = Array.from(list.querySelectorAll('.list-group-item'));
-    const index = items.findIndex(item => item.getAttribute('data-person') === person);
-    if (index !== -1) {
-        movePerson(index, direction);
+function updateRotationNumbers() {
+    const items = document.querySelectorAll('#rotationList [data-person]');
+    items.forEach((item, index) => {
+        const badge = item.querySelector('span');
+        if (badge && badge.classList.contains('bg-gray-500')) {
+            badge.textContent = index + 1;
+        }
+    });
+}
+
+function addToRotation(memberName) {
+    const rotationList = document.getElementById('rotationList');
+    if (!rotationList) return;
+
+    // Check if already in rotation
+    const existingItem = rotationList.querySelector(`[data-person="${memberName}"]`);
+    if (existingItem) return;
+
+    // Create new rotation item
+    const newItem = document.createElement('div');
+    newItem.className = 'flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200 cursor-move';
+    newItem.dataset.person = memberName;
+    
+    const maxOrder = rotationList.children.length + 1;
+    newItem.innerHTML = `
+        <div class="flex items-center">
+            <span class="inline-flex items-center justify-center w-6 h-6 text-xs font-medium text-white bg-gray-500 rounded-full mr-3">${maxOrder}</span>
+            <span class="text-sm font-medium text-gray-900">${memberName}</span>
+        </div>
+        <button type="button" class="text-red-500 hover:text-red-700 transition-colors duration-200" 
+                onclick="removePerson('${memberName}')" 
+                title="Remove from rotation">
+            <i class="bi bi-trash"></i>
+        </button>
+    `;
+
+    rotationList.appendChild(newItem);
+    markChanges();
+}
+
+function removeFromRotation(memberName) {
+    const item = document.querySelector(`#rotationList [data-person="${memberName}"]`);
+    if (item) {
+        item.remove();
+        updateRotationNumbers();
+        markChanges();
     }
 }
 
 function removePerson(person) {
     if (confirm(`Remove ${person} from rotation?`)) {
-        const item = document.querySelector(`[data-person="${person}"]`);
-        if (item) {
-            item.remove();
-            updateRotationNumbers();
+        // Send AJAX request to remove from rotation
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+        const headers = {
+            'Content-Type': 'application/x-www-form-urlencoded'
+        };
+        if (csrfToken) {
+            headers['X-CSRFToken'] = csrfToken;
         }
+        fetch('/standby/roster/toggle_rotation', {
+            method: 'POST',
+            headers: headers,
+            body: `name=${encodeURIComponent(person)}&add_to_rotation=false`
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                removeFromRotation(person);
+                
+                // Update toggle state
+                const toggle = document.querySelector(`.rotation-toggle[data-member="${person}"]`);
+                if (toggle) {
+                    toggle.checked = false;
+                }
+                showToast(data.message, 'success');
+            } else {
+                showToast(data.message, 'error');
+            }
+        })
+        .catch(error => {
+            showToast('Failed to remove from rotation', 'error');
+            console.error('Error:', error);
+        });
     }
 }
 
-function updateRotationNumbers() {
-    const items = document.querySelectorAll('#rotationList .list-group-item');
-    items.forEach((item, index) => {
-        const badge = item.querySelector('.badge');
-        if (badge) {
-            badge.textContent = index + 1;
+async function saveRotation(applyMode = 'immediate') {
+    const saveBtn = document.getElementById('saveRotationBtn');
+    const btnText = saveBtn.querySelector('.btn-text');
+    const spinner = saveBtn.querySelector('.spinner');
+    
+    // Show loading state
+    saveBtn.disabled = true;
+    btnText.textContent = 'Saving...';
+    spinner.classList.remove('hidden');
+    
+    try {
+        // Get current rotation order
+        const rotationItems = document.querySelectorAll('#rotationList [data-person]');
+        const newRotation = Array.from(rotationItems).map(item => item.dataset.person);
+        
+        // Get CSRF token
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+        
+        // Send request
+        const response = await fetch('/standby/save-rotation', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            },
+            body: JSON.stringify({
+                rotation: newRotation,
+                apply_mode: applyMode
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            // Show enhanced success message with update details
+            let message = result.message;
+            let toastType = 'success';
+            
+            // Add visual indicators for what was updated
+            if (result.calendar_updated && result.dashboard_updated) {
+                message += ' 📅📊';
+            } else if (result.calendar_updated) {
+                message += ' 📅';
+            }
+            
+            // Show different message for future start dates
+            if (result.start_date_in_future) {
+                showToast('Rotation Saved', message, 'info');
+                // Show additional info toast
+                setTimeout(() => {
+                    showToast('Info', 'Dashboard will update automatically when the rotation start date is reached.', 'info');
+                }, 1000);
+            } else {
+                showToast('Rotation Saved', message, toastType);
+            }
+            
+            hasChanges = false;
+            originalRotation = newRotation;
+            saveBtn.disabled = true;
+            
+            // Update button text to show what was updated
+            if (result.calendar_updated && result.dashboard_updated) {
+                btnText.textContent = 'Calendar & Dashboard Updated';
+            } else if (result.calendar_updated) {
+                btnText.textContent = 'Calendar Updated';
+            } else {
+                btnText.textContent = 'Changes Saved';
+            }
+            
+            // Reset button text after 3 seconds
+            setTimeout(() => {
+                btnText.textContent = 'Save Changes';
+            }, 3000);
+            
+            // Reload upcoming rotation panel if this was a planned rotation
+            if (result.planned_rotation) {
+                loadUpcomingRotationPanel();
+            }
+            
+        } else {
+            showToast('Error', result.message || 'Error saving rotation', 'error');
         }
-    });
+    } catch (error) {
+        console.error('Error saving rotation:', error);
+        showToast('Error', 'Error saving rotation. Please try again.', 'error');
+    } finally {
+        // Reset button state
+        btnText.textContent = 'Save Changes';
+        spinner.classList.add('hidden');
+    }
+}
+
+function showToast(title, message, type = 'success') {
+    const toastContainer = document.getElementById('toastContainer');
+    
+    // Handle both old format (message only) and new format (title + message)
+    let displayTitle = title;
+    let displayMessage = message;
+    
+    if (arguments.length === 2) {
+        // Old format: showToast(message, type)
+        displayTitle = type === 'success' ? 'Success' : type === 'error' ? 'Error' : 'Info';
+        displayMessage = title;
+        type = message;
+    }
+    
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+    
+    const iconMap = {
+        'success': 'bi-check-circle text-green-500',
+        'error': 'bi-exclamation-triangle text-red-500',
+        'warning': 'bi-exclamation-triangle text-yellow-500',
+        'info': 'bi-info-circle text-blue-500'
+    };
+    
+    toast.innerHTML = `
+        <div class="p-4">
+            <div class="flex items-center">
+                <div class="flex-shrink-0">
+                    <i class="bi ${iconMap[type] || iconMap.info}"></i>
+                </div>
+                <div class="ml-3 flex-1">
+                    <p class="text-sm font-medium text-gray-900">${displayTitle}</p>
+                    <p class="text-sm text-gray-600">${displayMessage}</p>
+                </div>
+                <div class="ml-auto pl-3">
+                    <button type="button" class="text-gray-400 hover:text-gray-600" onclick="this.parentElement.parentElement.parentElement.remove()">
+                        <i class="bi bi-x"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    toastContainer.appendChild(toast);
+    
+    // Show toast
+    setTimeout(() => {
+        toast.classList.add('show');
+    }, 100);
+    
+    // Auto-hide after 5 seconds
+    setTimeout(() => {
+        toast.classList.remove('show');
+        setTimeout(() => {
+            if (toast.parentElement) {
+                toast.remove();
+            }
+        }, 300);
+    }, 5000);
 }
 
 function editMember(name, color, active) {
@@ -685,6 +1088,36 @@ function editMember(name, color, active) {
     
     const modal = new bootstrap.Modal(document.getElementById('editMemberModal'));
     modal.show();
+}
+
+function loadUpcomingRotationPanel() {
+    fetch('/standby/api/upcoming-rotation')
+        .then(res => res.json())
+        .then(data => {
+            const panel = document.getElementById('upcomingRotationPanel');
+            if (data.upcoming) {
+                panel.style.display = '';
+                panel.innerHTML = `
+                    <div class="card border-info mb-3">
+                        <div class="card-header bg-info text-white">
+                            <i class="bi bi-calendar-event"></i> Upcoming Rotation Pattern
+                        </div>
+                        <div class="card-body">
+                            <p><strong>Start Date:</strong> ${new Date(data.upcoming.start_date).toLocaleDateString()}</p>
+                            <ul>
+                                ${data.upcoming.rotation_order.map((name, i) => `<li>${i+1}. ${name}</li>`).join('')}
+                            </ul>
+                            ${data.upcoming.notes ? `<p><em>${data.upcoming.notes}</em></p>` : ''}
+                        </div>
+                    </div>
+                `;
+            } else {
+                panel.style.display = 'none';
+            }
+        })
+        .catch(error => {
+            console.error('Error loading upcoming rotation:', error);
+        });
 }
 
 // Keyboard shortcuts
@@ -705,4 +1138,34 @@ document.addEventListener('keydown', function(e) {
     }
 });
 </script>
+
+<!-- Rotation Apply Mode Modal -->
+<div class="modal fade" id="rotationApplyModeModal" tabindex="-1" aria-labelledby="rotationApplyModeModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="rotationApplyModeModalLabel">When should this rotation take effect?</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div class="form-check mb-2">
+          <input class="form-check-input" type="radio" name="applyMode" id="applyNow" value="immediate" checked>
+          <label class="form-check-label" for="applyNow">
+            Immediately (regenerate future assignments now)
+          </label>
+        </div>
+        <div class="form-check">
+          <input class="form-check-input" type="radio" name="applyMode" id="applyAfterCycle" value="after_cycle">
+          <label class="form-check-label" for="applyAfterCycle">
+            After current cycle ends (schedule as next rotation)
+          </label>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" id="confirmApplyModeBtn" class="btn btn-success">Confirm</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 {% endblock %} 

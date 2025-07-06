@@ -1,0 +1,160 @@
+{% macro add_member_modal(all_users, team_members, inactive_members) %}
+<div class="modal fade" id="addMemberModal" tabindex="-1" aria-labelledby="addMemberModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="addMemberModalLabel">
+                    <i class="bi bi-person-plus"></i> Add New Team Member
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form method="post" action="{{ url_for('standby.add_member') }}" id="addMemberForm">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="name" class="form-label">User <span class="text-danger">*</span></label>
+                        <select class="form-select" id="name" name="name" required>
+                            <option value="" disabled selected>Select a user</option>
+                            
+                            {% if inactive_members %}
+                                <optgroup label="Reactivate Inactive Members">
+                                    {% for member in inactive_members %}
+                                        <option value="{{ member.username }}" data-color="{{ member.color }}">
+                                            🔄 {{ member.username }} (Reactivate)
+                                        </option>
+                                    {% endfor %}
+                                </optgroup>
+                            {% endif %}
+                            
+                            {% if all_users %}
+                                <optgroup label="Add New Members">
+                                    {% for user in all_users %}
+                                        <option value="{{ user.username }}">{{ user.username }}</option>
+                                    {% endfor %}
+                                </optgroup>
+                            {% endif %}
+                        </select>
+                        <div class="form-text">
+                            Choose to reactivate an inactive member or add a new user to the standby roster
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="color" class="form-label">Color</label>
+                        <div class="d-flex align-items-center gap-2">
+                            <input type="color" class="form-control form-control-color" id="color" name="color" 
+                                   value="#007bff" title="Choose color">
+                            <input type="text" class="form-control" id="colorText" placeholder="#007bff" 
+                                   pattern="^#[0-9A-Fa-f]{6}$">
+                        </div>
+                    </div>
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" id="active" name="active" checked>
+                        <label class="form-check-label" for="active">Active member</label>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-plus-circle"></i> Add Member
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endmacro %}
+
+{% macro add_override_modal(team_members, all_users, today) %}
+<div class="modal fade" id="addOverrideModal" tabindex="-1" aria-labelledby="addOverrideModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="addOverrideModalLabel">
+                    <i class="bi bi-calendar-plus"></i> Add Date Override
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form method="post" action="{{ url_for('standby.add_override_route') }}" id="addOverrideForm">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="override_start_date" class="form-label">Start Date <span class="text-danger">*</span></label>
+                        <input type="date" class="form-control" id="override_start_date" name="override_start_date" 
+                               required min="{{ today }}">
+                    </div>
+                    <div class="mb-3">
+                        <label for="override_end_date" class="form-label">End Date <span class="text-danger">*</span></label>
+                        <input type="date" class="form-control" id="override_end_date" name="override_end_date" 
+                               required min="{{ today }}">
+                    </div>
+                    <div class="mb-3">
+                        <label for="override_person" class="form-label">Person <span class="text-danger">*</span></label>
+                        <select class="form-select" id="override_person" name="override_person" required>
+                            <option value="" disabled selected>Select person</option>
+                            {% for member in team_members if member.active %}
+                                <option value="{{ member.name }}">{{ member.name }}</option>
+                            {% endfor %}
+                            {% if all_users %}
+                                <optgroup label="Other Users">
+                                    {% for user in all_users %}
+                                        {% if not user.username in team_members|map(attribute='name')|list %}
+                                            <option value="{{ user.username }}">{{ user.username }}</option>
+                                        {% endif %}
+                                    {% endfor %}
+                                </optgroup>
+                            {% endif %}
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-warning">
+                        <i class="bi bi-calendar-plus"></i> Add Override
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endmacro %}
+
+{% macro edit_member_modal() %}
+<div class="modal fade" id="editMemberModal" tabindex="-1" aria-labelledby="editMemberModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="editMemberModalLabel">
+                    <i class="bi bi-pencil"></i> Edit Team Member
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form method="post" action="{{ url_for('standby.edit_member') }}" id="editMemberForm">
+                <div class="modal-body">
+                    <input type="hidden" id="edit_name_original" name="name_original">
+                    <div class="mb-3">
+                        <label for="edit_name" class="form-label">Name <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="edit_name" name="name" required 
+                               pattern="[A-Za-z0-9\s\-_]+" minlength="2" maxlength="50">
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit_color" class="form-label">Color</label>
+                        <div class="d-flex align-items-center gap-2">
+                            <input type="color" class="form-control form-control-color" id="edit_color" name="color">
+                            <input type="text" class="form-control" id="edit_colorText" placeholder="#007bff" 
+                                   pattern="^#[0-9A-Fa-f]{6}$">
+                        </div>
+                    </div>
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" id="edit_active" name="active">
+                        <label class="form-check-label" for="edit_active">Active member</label>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-check-circle"></i> Save Changes
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endmacro %} 

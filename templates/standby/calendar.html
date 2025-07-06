@@ -27,6 +27,9 @@
                         <button id="monthViewBtn" class="btn btn-outline-primary active">Month</button>
                         <button id="weekViewBtn" class="btn btn-outline-primary">Week</button>
                     </div>
+                    <button id="refreshBtn" class="btn btn-info btn-modern">
+                        <i class="bi bi-arrow-clockwise"></i> Refresh
+                    </button>
                     <button id="exportBtn" class="btn btn-success btn-modern">
                         <i class="bi bi-download"></i> Export
                     </button>
@@ -143,6 +146,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const monthViewBtn = document.getElementById('monthViewBtn');
     const weekViewBtn = document.getElementById('weekViewBtn');
     const exportBtn = document.getElementById('exportBtn');
+    const refreshBtn = document.getElementById('refreshBtn');
     const legendEl = document.getElementById('personLegend');
     const toggleLegendBtn = document.getElementById('toggleLegendBtn');
     const legendBody = document.getElementById('legendBody');
@@ -255,6 +259,39 @@ document.addEventListener('DOMContentLoaded', function() {
         const title = calendar.view.title;
         utils.exportToCSV(events, title);
         utils.showNotification('Calendar exported successfully!', 'success');
+    });
+    
+    refreshBtn.addEventListener('click', () => {
+        // Show loading state
+        calendar.setOption('loading', true);
+        
+        // Get current view dates
+        const currentView = calendar.view;
+        const startDate = currentView.currentStart;
+        const endDate = currentView.currentEnd;
+        
+        // Fetch fresh data from the API
+        fetch(`/standby/api/calendar/${startDate.getFullYear()}/${startDate.getMonth() + 1}`)
+            .then(response => response.json())
+            .then(newEvents => {
+                // Remove existing events
+                calendar.removeAllEvents();
+                
+                // Add new events
+                calendar.addEventSource(newEvents);
+                
+                // Update legend
+                generateLegend();
+                
+                utils.showNotification('Calendar refreshed successfully!', 'success');
+            })
+            .catch(error => {
+                console.error('Failed to refresh calendar:', error);
+                utils.showNotification('Failed to refresh calendar', 'error');
+            })
+            .finally(() => {
+                calendar.setOption('loading', false);
+            });
     });
     
     toggleLegendBtn.addEventListener('click', () => {

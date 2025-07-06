@@ -1,0 +1,66 @@
+{% extends 'base.html' %}
+
+{% block title %}Roster | Standby Overtime App{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/roster.css') }}">
+<meta name="csrf-token" content="{{ csrf_token() if csrf_token else '' }}">
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Page Header with Breadcrumb -->
+    {% from 'components/breadcrumb.html' import render_breadcrumb %}
+    {{ render_breadcrumb([
+        {'url': '/dashboard', 'text': 'Dashboard'},
+        {'url': '#', 'text': 'Roster Management'}
+    ]) }}
+
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="mb-1">Manage Team Roster</h2>
+            <p class="text-muted mb-0">Add team members, manage rotation, and set date overrides</p>
+        </div>
+        <div class="page-header-actions">
+            <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addMemberModal">
+                <i class="bi bi-person-plus"></i> Add Member
+            </button>
+            <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addOverrideModal">
+                <i class="bi bi-calendar-plus"></i> Add Override
+            </button>
+        </div>
+    </div>
+
+    <!-- Flash Messages -->
+    {% from 'components/flash_messages.html' import render_flash_messages %}
+    {{ render_flash_messages() }}
+
+    <div class="row g-4">
+        <!-- Team Members Table -->
+        <div class="col-lg-8">
+            {% from 'components/member_table.html' import render_member_table %}
+            {{ render_member_table(team_members, rotation) }}
+        </div>
+
+        <!-- Rotation Pattern -->
+        <div class="col-lg-4">
+            {% from 'components/rotation_pattern.html' import render_rotation_pattern %}
+            {{ render_rotation_pattern(rotation, duration_config, today_date) }}
+        </div>
+    </div>
+
+    <!-- Date Overrides Section -->
+    {% from 'components/date_overrides.html' import date_overrides_section %}
+    {{ date_overrides_section(overrides, team_members) }}
+</div>
+
+<!-- Modals -->
+{% from 'components/roster_modals.html' import add_member_modal, add_override_modal, edit_member_modal %}
+{{ add_member_modal(all_users, team_members, inactive_members) }}
+{{ add_override_modal(team_members, all_users, today) }}
+{{ edit_member_modal() }}
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/roster.js') }}"></script>
+{% endblock %} 

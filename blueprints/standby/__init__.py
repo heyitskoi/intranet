@@ -3,8 +3,19 @@ from flask_login import login_required, current_user
 from datetime import datetime, timedelta
 import os
 import json
-from .utils.rotation_manager import get_standby_person, load_roster, save_roster
-from .utils.overtime_logger import load_overtime_logs, validate_overtime_entry, save_overtime_entry, update_overtime_entry
+from models import db
+from sqlalchemy import and_
+# Import database-based utilities (new)
+from .utils.db_rotation_manager import (
+    get_standby_person, load_roster, add_team_member, remove_team_member, 
+    update_team_member, update_rotation_order, add_override, remove_override,
+    get_active_standby_members, get_standby_member_by_username, is_user_standby_member
+)
+from .utils.db_overtime_logger import (
+    load_overtime_logs, validate_overtime_entry, save_overtime_entry, update_overtime_entry,
+    get_overtime_summary, get_all_overtime_logs, get_recent_overtime_activity,
+    delete_overtime_entry, export_overtime_to_csv
+)
 from .config import StandbyConfig
 
 # Create blueprint
@@ -12,6 +23,23 @@ standby_bp = Blueprint('standby', __name__, url_prefix='/standby')
 
 # Initialize config
 config = StandbyConfig()
+
+def is_admin_user(user):
+    """Check if user has admin role."""
+    return user.role and user.role.name == 'Admin'
+
+def admin_required(f):
+    """Decorator to require admin access."""
+    from functools import wraps
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not current_user.is_authenticated:
+            return redirect(url_for('auth.login'))
+        if not is_admin_user(current_user):
+            flash('Admin access required.', 'error')
+            return redirect(url_for('standby.dashboard'))
+        return f(*args, **kwargs)
+    return decorated_function
 
 def get_current_standby_user():
     """Get the current standby user for today"""
@@ -26,14 +54,24 @@ def index():
 @standby_bp.route('/dashboard')
 @login_required
 def dashboard():
+    # Check and promote future rotation if due
+    department_id = current_user.department.id if current_user.department else None
+    if department_id:
+        from .utils.rotation_planner import promote_future_rotation_if_due
+        promoted, regenerated_count = promote_future_rotation_if_due(department_id)
+        if promoted:
+            print(f"Promoted future rotation and regenerated {regenerated_count} assignments")
+    
     # Get current standby user
     current_user_name = current_user.username
     today_dt = datetime.today()
     today = today_dt.strftime('%Y-%m-%d')
     next_week_dt = today_dt + timedelta(days=7)
     next_week = next_week_dt.strftime('%Y-%m-%d')
-    current_standby = get_standby_person(today)
-    next_standby = get_standby_person(next_week)
+    # Get department ID for rotation calculation
+    department_id = current_user.department.id if current_user.department else None
+    current_standby = get_standby_person(today, department_id)
+    next_standby = get_standby_person(next_week, department_id)
     year = today_dt.year
     month = today_dt.month
     month_name = today_dt.strftime('%B')
@@ -43,7 +81,7 @@ def dashboard():
     total_overtime_hours = sum(float(log.get('duration_hours', 0)) for log in overtime_logs)
     
     # Load roster data for team members and overrides
-    roster_data = load_roster()
+    roster_data = load_roster(department_id)
     team_members = [m for m in roster_data.get('team_members', []) if m.get('active', True)]
     overrides = roster_data.get('overrides', {})
     
@@ -55,30 +93,7 @@ def dashboard():
     ]
     
     # Get recent overtime activity (last 5 entries across all team members)
-    recent_overtime = []
-    for member in team_members:
-        member_logs = load_overtime_logs(member['name'], year, month)
-        recent_overtime.extend(member_logs[:2])  # Get 2 most recent per member
-
-    # Add year and month fields to each log in recent_overtime
-    for log in recent_overtime:
-        start_time = log.get('start_time', '')
-        if start_time:
-            date_part = start_time.split('T')[0] if 'T' in start_time else start_time.split(' ')[0]
-            parts = date_part.split('-')
-            if len(parts) == 3:
-                log['year'] = parts[0]
-                log['month'] = int(parts[1])
-            else:
-                log['year'] = ''
-                log['month'] = ''
-        else:
-            log['year'] = ''
-            log['month'] = ''
-
-    # Sort by start time and get 5 most recent
-    recent_overtime.sort(key=lambda x: x.get('start_time', ''), reverse=True)
-    recent_overtime = recent_overtime[:5]
+    recent_overtime = get_recent_overtime_activity(limit=5)
     
     # Generate notifications
     notifications = []
@@ -117,6 +132,14 @@ def dashboard():
 @login_required
 def calendar():
     try:
+        # Check and promote future rotation if due
+        department_id = current_user.department.id if current_user.department else None
+        if department_id:
+            from .utils.rotation_planner import promote_future_rotation_if_due
+            promoted, regenerated_count = promote_future_rotation_if_due(department_id)
+            if promoted:
+                print(f"Promoted future rotation and regenerated {regenerated_count} assignments")
+        
         # Determine current month and year
         today = datetime.today()
         year = request.args.get('year', today.year, type=int)
@@ -136,8 +159,11 @@ def calendar():
             next_month = datetime(year, month + 1, 1)
         num_days = (next_month - first_day).days
         
+        # Get department ID for rotation calculation
+        department_id = current_user.department.id if current_user.department else None
+        
         # Load roster data for colors
-        roster_data = load_roster()
+        roster_data = load_roster(department_id)
         team_members = {m['name']: m.get('color', '#6c757d') for m in roster_data.get('team_members', [])}
         person_colors = {**config.DEFAULT_PERSON_COLORS, **team_members}
         
@@ -147,7 +173,7 @@ def calendar():
         for i in range(num_days):
             day = first_day + timedelta(days=i)
             date_str = day.strftime('%Y-%m-%d')
-            person = get_standby_person(date_str)
+            person = get_standby_person(date_str, department_id)
             
             if person:
                 # Determine if this is today, past, or future
@@ -197,8 +223,11 @@ def api_calendar(year, month):
             next_month = datetime(year, month + 1, 1)
         num_days = (next_month - first_day).days
         
+        # Get department ID for rotation calculation
+        department_id = current_user.department.id if current_user.department else None
+        
         # Load roster data for colors
-        roster_data = load_roster()
+        roster_data = load_roster(department_id)
         team_members = {m['name']: m.get('color', '#6c757d') for m in roster_data.get('team_members', [])}
         person_colors = {**config.DEFAULT_PERSON_COLORS, **team_members}
         
@@ -209,7 +238,7 @@ def api_calendar(year, month):
         for i in range(num_days):
             day = first_day + timedelta(days=i)
             date_str = day.strftime('%Y-%m-%d')
-            person = get_standby_person(date_str)
+            person = get_standby_person(date_str, department_id)
             
             if person:
                 # Determine if this is today, past, or future
@@ -242,36 +271,112 @@ def api_calendar(year, month):
 @standby_bp.route('/roster', methods=['GET'])
 @login_required
 def roster():
-    roster_data = load_roster()
+    # Get users from the same department for dropdown, excluding those who are already standby members
+    from models import User, StandbyMember
+    
+    # Get current user's department
+    department_id = current_user.department.id if current_user.department else None
+    
+    if department_id:
+        # Get standby user IDs from the same department
+        standby_user_ids = [
+            member.user_id for member in StandbyMember.query.join(User).filter(
+                User.department_id == department_id
+            ).all()
+        ]
+        
+        # Get available users from the same department
+        if standby_user_ids:
+            all_users = User.query.filter(
+                and_(
+                    User.department_id == department_id,
+                    ~User.id.in_(standby_user_ids)
+                )
+            ).all()
+        else:
+            all_users = User.query.filter(User.department_id == department_id).all()
+    else:
+        # If user has no department, only show users without departments
+        standby_user_ids = [
+            member.user_id for member in StandbyMember.query.join(User).filter(
+                User.department_id.is_(None)
+            ).all()
+        ]
+        
+        if standby_user_ids:
+            all_users = User.query.filter(
+                and_(
+                    User.department_id.is_(None),
+                    ~User.id.in_(standby_user_ids)
+                )
+            ).all()
+        else:
+            all_users = User.query.filter(User.department_id.is_(None)).all()
+    
+    # Get inactive members for reactivation (from same department)
+    inactive_members = []
+    if department_id:
+        inactive_query = StandbyMember.query.filter_by(active=False).join(User).filter(
+            User.department_id == department_id
+        )
+    else:
+        inactive_query = StandbyMember.query.filter_by(active=False).join(User).filter(
+            User.department_id.is_(None)
+        )
+    
+    for member in inactive_query.all():
+        inactive_members.append({
+            'username': member.user.username,
+            'color': member.color
+        })
+    
+    roster_data = load_roster(department_id)
     team_members = roster_data.get('team_members', [])
     overrides = roster_data.get('overrides', {})
     rotation = roster_data.get('rotation', [])
     today = datetime.today().strftime('%Y-%m-%d')
-    return render_template('standby/roster.html', team_members=team_members, overrides=overrides, rotation=rotation, today=today)
+    today_date = datetime.today().date()
+    
+    # Check if user is admin
+    is_admin = is_admin_user(current_user)
+    
+    # Get duration configuration if admin
+    duration_config_obj = None
+    if is_admin:
+        from models import StandbyDurationConfig
+        department = current_user.department
+        if department:
+            duration_config_obj = StandbyDurationConfig.query.filter_by(department_id=department.id).first()
+    
+    return render_template('standby/roster.html', 
+                         team_members=team_members, 
+                         overrides=overrides, 
+                         rotation=rotation, 
+                         all_users=all_users, 
+                         inactive_members=inactive_members, 
+                         today=today,
+                         today_date=today_date,
+                         is_admin=is_admin,
+                         duration_config=duration_config_obj)
 
 @standby_bp.route('/roster/add_member', methods=['POST'])
 @login_required
 def add_member():
-    roster_data = load_roster()
-    team_members = roster_data.get('team_members', [])
     name = request.form.get('name')
-    color = request.form.get('color')
+    color = request.form.get('color', '#007bff')
     active = bool(request.form.get('active'))
-    # Prevent duplicate names
-    if any(m.get('name') == name for m in team_members):
-        flash('Member with this name already exists.', 'warning')
-        return redirect(url_for('standby.roster'))
-    team_members.append({'name': name, 'color': color, 'active': active})
-    roster_data['team_members'] = team_members
-    save_roster(roster_data)
-    flash('Team member added!', 'success')
+    
+    try:
+        add_team_member(name, color, active)
+        flash('Team member added!', 'success')
+    except ValueError as e:
+        flash(f'Error: {e}', 'warning')
+    
     return redirect(url_for('standby.roster'))
 
 @standby_bp.route('/roster/add_override', methods=['POST'])
 @login_required
-def add_override():
-    roster_data = load_roster()
-    overrides = roster_data.get('overrides', {})
+def add_override_route():
     start_date = request.form.get('override_start_date')
     end_date = request.form.get('override_end_date')
     person = request.form.get('override_person')
@@ -280,54 +385,157 @@ def add_override():
         flash('Start date, end date, and person are required for override.', 'warning')
         return redirect(url_for('standby.roster'))
     
-    # Add overrides for each date in the range
-    from datetime import datetime, timedelta
-    start = datetime.strptime(start_date, '%Y-%m-%d')
-    end = datetime.strptime(end_date, '%Y-%m-%d')
+    try:
+        from .utils.assignment_rotation_manager import AssignmentRotationManager
+        department_id = current_user.department.id if current_user.department else None
+        # Add overrides for each date in the range
+        start = datetime.strptime(start_date, '%Y-%m-%d')
+        end = datetime.strptime(end_date, '%Y-%m-%d')
+        
+        current = start
+        while current <= end:
+            date_str = current.strftime('%Y-%m-%d')
+            add_override(date_str, person, created_by_username=current_user.username)
+            # Also update/create the assignment for the override
+            AssignmentRotationManager.create_manual_assignment(date_str, person, department_id)
+            current += timedelta(days=1)
+        
+        flash(f'Override added for {start_date} to {end_date}!', 'success')
+    except ValueError as e:
+        flash(f'Error: {e}', 'warning')
     
-    current = start
-    while current <= end:
-        date_str = current.strftime('%Y-%m-%d')
-        overrides[date_str] = person
-        current += timedelta(days=1)
-    
-    roster_data['overrides'] = overrides
-    save_roster(roster_data)
-    flash(f'Override added for {start_date} to {end_date}!', 'success')
     return redirect(url_for('standby.roster'))
 
 @standby_bp.route('/roster/remove_override', methods=['POST'])
 @login_required
-def remove_override():
-    roster_data = load_roster()
+def remove_override_route():
     date = request.form.get('date')
-    overrides = roster_data.get('overrides', {})
-    if date in overrides:
-        overrides.pop(date)
-        roster_data['overrides'] = overrides
-        save_roster(roster_data)
-        flash(f'Override for {date} removed.', 'success')
-    else:
-        flash('Override not found.', 'warning')
+    
+    try:
+        from .utils.assignment_rotation_manager import AssignmentRotationManager
+        from models import StandbyOverride, StandbyAssignment
+        department_id = current_user.department.id if current_user.department else None
+        
+        # Get the override to find the original assignment
+        override_date = datetime.strptime(date, '%Y-%m-%d').date()
+        override = StandbyOverride.query.filter_by(date=override_date).first()
+        
+        if not override:
+            flash(f'No override found for {date}.', 'warning')
+            return redirect(url_for('standby.roster'))
+        
+        # Store the original user ID before removing the override
+        original_user_id = override.original_user_id
+        
+        remove_override(date)
+        
+        # Restore the original assignment if we have the original user ID
+        if department_id and original_user_id:
+            # Update or create the assignment with the original user
+            existing_assignment = StandbyAssignment.query.filter_by(
+                department_id=department_id,
+                date=override_date
+            ).first()
+            
+            if existing_assignment:
+                existing_assignment.user_id = original_user_id
+            else:
+                # Create new assignment with original user
+                assignment = StandbyAssignment(
+                    department_id=department_id,
+                    user_id=original_user_id,
+                    date=override_date
+                )
+                db.session.add(assignment)
+            
+            db.session.commit()
+            flash(f'Override for {date} removed and original assignment restored.', 'success')
+        else:
+            # If we don't have the original user ID, regenerate based on rotation
+            if department_id:
+                AssignmentRotationManager._generate_assignment_for_date(override_date, department_id)
+            flash(f'Override for {date} removed.', 'success')
+        
+    except ValueError as e:
+        flash(f'Error: {e}', 'warning')
+    
     return redirect(url_for('standby.roster'))
 
 @standby_bp.route('/roster/toggle_member', methods=['POST'])
 @login_required
 def toggle_member():
-    roster_data = load_roster()
     name = request.form.get('name')
-    for member in roster_data.get('team_members', []):
-        if member.get('name') == name:
-            member['active'] = not member.get('active', True)
-            break
-    save_roster(roster_data)
-    flash(f'{name} status toggled.', 'success')
+    
+    try:
+        member = get_standby_member_by_username(name)
+        if member:
+            update_team_member(name, active=not member.active)
+            status = 'activated' if not member.active else 'deactivated'
+            flash(f'{name} {status}.', 'success')
+        else:
+            flash(f'Team member {name} not found.', 'warning')
+    except ValueError as e:
+        flash(f'Error: {e}', 'warning')
+    
     return redirect(url_for('standby.roster'))
+
+@standby_bp.route('/roster/toggle_rotation', methods=['POST'])
+@login_required
+def toggle_rotation():
+    name = request.form.get('name')
+    add_to_rotation = request.form.get('add_to_rotation', 'false').lower() == 'true'
+    
+    try:
+        from models import User, StandbyMember
+        user = User.query.filter_by(username=name).first()
+        if user:
+            standby_member = StandbyMember.query.filter_by(user_id=user.id).first()
+            if standby_member and standby_member.active:
+                # Get department ID for assignment regeneration
+                department_id = user.department.id if user.department else None
+                
+                if add_to_rotation:
+                    # Add to rotation
+                    max_order = db.session.query(db.func.max(StandbyMember.rotation_order)).scalar()
+                    new_order = (max_order or 0) + 1
+                    standby_member.rotation_order = new_order
+                    db.session.commit()
+                    
+                    # Regenerate future assignments
+                    if department_id:
+                        try:
+                            from .utils.assignment_rotation_manager import AssignmentRotationManager
+                            regenerated_count = AssignmentRotationManager.regenerate_future_assignments(department_id)
+                            print(f"Regenerated {regenerated_count} future assignments after adding {name} to rotation")
+                        except Exception as e:
+                            print(f"Warning: Failed to regenerate future assignments: {e}")
+                    
+                    return jsonify({'success': True, 'message': f'{name} added to rotation'})
+                else:
+                    # Remove from rotation
+                    standby_member.rotation_order = None
+                    db.session.commit()
+                    
+                    # Regenerate future assignments
+                    if department_id:
+                        try:
+                            from .utils.assignment_rotation_manager import AssignmentRotationManager
+                            regenerated_count = AssignmentRotationManager.regenerate_future_assignments(department_id)
+                            print(f"Regenerated {regenerated_count} future assignments after removing {name} from rotation")
+                        except Exception as e:
+                            print(f"Warning: Failed to regenerate future assignments: {e}")
+                    
+                    return jsonify({'success': True, 'message': f'{name} removed from rotation'})
+            else:
+                return jsonify({'success': False, 'message': f'{name} is not an active standby member'}), 400
+        else:
+            return jsonify({'success': False, 'message': f'User {name} not found'}), 404
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Error: {str(e)}'}), 500
 
 @standby_bp.route('/roster/update_rotation', methods=['POST'])
 @login_required
 def update_rotation():
-    roster_data = load_roster()
     # Always get the current rotation order from the form
     rotation = request.form.getlist('rotation[]')
 
@@ -335,10 +543,25 @@ def update_rotation():
     add_person = request.form.get('add')
     if add_person:
         if add_person not in rotation:
-            rotation.append(add_person)
-            roster_data['rotation'] = rotation
-            save_roster(roster_data)
-            flash(f'{add_person} added to rotation!', 'success')
+            try:
+                # Add to rotation by updating the member's rotation_order
+                from models import User, StandbyMember
+                user = User.query.filter_by(username=add_person).first()
+                if user:
+                    standby_member = StandbyMember.query.filter_by(user_id=user.id).first()
+                    if standby_member and standby_member.active:
+                        # Find the next available rotation order
+                        max_order = db.session.query(db.func.max(StandbyMember.rotation_order)).scalar()
+                        new_order = (max_order or 0) + 1
+                        standby_member.rotation_order = new_order
+                        db.session.commit()
+                        flash(f'{add_person} added to rotation!', 'success')
+                    else:
+                        flash(f'{add_person} is not an active standby member.', 'warning')
+                else:
+                    flash(f'User {add_person} not found.', 'warning')
+            except Exception as e:
+                flash(f'Error adding {add_person} to rotation: {e}', 'warning')
         else:
             flash(f'{add_person} is already in rotation.', 'warning')
         return redirect(url_for('standby.roster'))
@@ -354,45 +577,278 @@ def update_rotation():
         elif direction == 'down' and index < len(rotation) - 1:
             rotation[index], rotation[index + 1] = rotation[index + 1], rotation[index]
             flash(f"Moved {rotation[index]} down!", 'success')
-        roster_data['rotation'] = rotation
-        save_roster(roster_data)
+        
+        # Update rotation order in database
+        try:
+            update_rotation_order(rotation)
+        except Exception as e:
+            flash(f'Error updating rotation: {e}', 'warning')
         return redirect(url_for('standby.roster'))
 
     # Handle removal
     remove = request.form.get('remove')
     if remove:
         if remove in rotation:
-            rotation.remove(remove)
-            roster_data['rotation'] = rotation
-            save_roster(roster_data)
-            flash(f'Removed {remove} from rotation!', 'success')
+            try:
+                # Remove from rotation by setting rotation_order to None
+                from models import User, StandbyMember
+                user = User.query.filter_by(username=remove).first()
+                if user:
+                    standby_member = StandbyMember.query.filter_by(user_id=user.id).first()
+                    if standby_member:
+                        standby_member.rotation_order = None
+                        db.session.commit()
+                        flash(f'Removed {remove} from rotation!', 'success')
+                    else:
+                        flash(f'{remove} not found in standby members.', 'warning')
+                else:
+                    flash(f'User {remove} not found.', 'warning')
+            except Exception as e:
+                flash(f'Error removing {remove} from rotation: {e}', 'warning')
         else:
             flash(f'{remove} not found in rotation.', 'warning')
         return redirect(url_for('standby.roster'))
 
     # Save on explicit save click
     if request.form.get('save'):
-        roster_data['rotation'] = rotation
-        save_roster(roster_data)
-        flash('Rotation updated!', 'success')
+        try:
+            update_rotation_order(rotation)
+            flash('Rotation updated!', 'success')
+        except Exception as e:
+            flash(f'Error updating rotation: {e}', 'warning')
         return redirect(url_for('standby.roster'))
 
     # Default: just redirect
     return redirect(url_for('standby.roster'))
+
+@standby_bp.route('/roster/duration-config', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def duration_config():
+    """Manage standby duration configuration for the department."""
+    from models import StandbyDurationConfig, Department
+    from .utils.assignment_rotation_manager import AssignmentRotationManager
+    
+    # Get current user's department
+    department = current_user.department
+    if not department:
+        flash('You must be assigned to a department to configure standby settings.', 'error')
+        return redirect(url_for('standby.roster'))
+    
+    # Get or create configuration for this department
+    config_obj = StandbyDurationConfig.query.filter_by(department_id=department.id).first()
+    
+    if request.method == 'POST':
+        try:
+            # Store old values for comparison
+            old_rotation_start_date = None
+            old_standby_shift_days = None
+            
+            if config_obj:
+                old_rotation_start_date = config_obj.rotation_start_date
+                old_standby_shift_days = config_obj.standby_shift_days
+            
+            if not config_obj:
+                # Create new configuration
+                config_obj = StandbyDurationConfig(
+                    department_id=department.id,
+                    created_by_id=current_user.id,
+                    updated_by_id=current_user.id
+                )
+                db.session.add(config_obj)
+            
+            # Update configuration values
+            new_standby_shift_days = int(request.form.get('standby_shift_days', 1))
+            config_obj.standby_shift_days = new_standby_shift_days
+            config_obj.monthly_overtime_limit = float(request.form.get('monthly_overtime_limit', 40.0))
+            config_obj.overtime_warning_threshold = float(request.form.get('overtime_warning_threshold', 35.0))
+            config_obj.dashboard_refresh_interval = int(request.form.get('dashboard_refresh_interval', 300))
+            config_obj.notification_auto_dismiss = int(request.form.get('notification_auto_dismiss', 10))
+            config_obj.updated_by_id = current_user.id
+            
+            # Handle rotation start date
+            rotation_start_date = request.form.get('rotation_start_date')
+            if rotation_start_date:
+                new_rotation_start_date = datetime.strptime(rotation_start_date, '%Y-%m-%d').date()
+                config_obj.rotation_start_date = new_rotation_start_date
+            
+            db.session.commit()
+            
+            # Check if rotation pattern changed and regenerate future assignments
+            pattern_changed = False
+            start_date_changed = False
+            shift_days_changed = False
+            
+            if old_rotation_start_date and old_rotation_start_date != config_obj.rotation_start_date:
+                pattern_changed = True
+                start_date_changed = True
+            if old_standby_shift_days and old_standby_shift_days != new_standby_shift_days:
+                pattern_changed = True
+                shift_days_changed = True
+            
+            if pattern_changed:
+                try:
+                    # Check if rotation start date is in the future
+                    today = datetime.now().date()
+                    start_date_in_future = config_obj.rotation_start_date > today
+                    
+                    regenerated_count = AssignmentRotationManager.regenerate_future_assignments(department.id)
+                    
+                    if start_date_changed:
+                        if start_date_in_future:
+                            flash(f'Configuration updated! Calendar updated with {regenerated_count} future assignments. Dashboard will update when rotation start date ({config_obj.rotation_start_date.strftime("%B %d, %Y")}) is reached.', 'success')
+                        else:
+                            flash(f'Configuration updated! Calendar and dashboard updated with {regenerated_count} assignments. Rotation start date changed to {config_obj.rotation_start_date.strftime("%B %d, %Y")}.', 'success')
+                    elif shift_days_changed:
+                        flash(f'Configuration updated! Standby shift duration changed to {new_standby_shift_days} days. Regenerated {regenerated_count} future assignments.', 'success')
+                    else:
+                        flash(f'Configuration updated! Regenerated {regenerated_count} future assignments.', 'success')
+                        
+                except Exception as e:
+                    flash(f'Configuration saved but failed to regenerate assignments: {e}', 'warning')
+            else:
+                flash('Standby duration configuration updated successfully!', 'success')
+            
+        except ValueError as e:
+            flash(f'Invalid input: {e}', 'error')
+        except Exception as e:
+            flash(f'Error saving configuration: {e}', 'error')
+            db.session.rollback()
+    
+    return render_template('standby/duration_config.html', 
+                         config=config_obj,
+                         department=department)
+
+@standby_bp.route('/save-rotation', methods=['POST'])
+@login_required
+def save_rotation():
+    """Save rotation order via JSON API with intelligent calendar/dashboard updates"""
+    try:
+        # Get JSON data from request
+        data = request.get_json()
+        if not data or 'rotation' not in data:
+            return jsonify({'success': False, 'message': 'Invalid request data'}), 400
+        
+        rotation = data['rotation']
+        apply_mode = data.get('apply_mode', 'immediate')  # 'immediate' or 'after_cycle'
+        
+        # Validate rotation data
+        if not isinstance(rotation, list):
+            return jsonify({'success': False, 'message': 'Rotation must be a list'}), 400
+        
+        # Get department ID for the current user
+        department_id = current_user.department.id if current_user.department else None
+        if not department_id:
+            return jsonify({'success': False, 'message': 'User not associated with a department'}), 400
+        
+        # Import rotation planner utilities
+        from .utils.rotation_planner import (
+            create_future_rotation_plan, 
+            calculate_rotation_cycle_end,
+            delete_future_rotation_plan
+        )
+        
+        if apply_mode == 'after_cycle':
+            # Calculate when the current cycle ends
+            start_date = calculate_rotation_cycle_end(department_id)
+            if not start_date:
+                return jsonify({'success': False, 'message': 'Unable to calculate rotation cycle end date'}), 400
+            
+            # Delete any existing future rotation plan
+            delete_future_rotation_plan(department_id)
+            
+            # Save the plan
+            create_future_rotation_plan(
+                department_id=department_id,
+                rotation_order=rotation,
+                start_date=start_date,
+                created_by_id=current_user.id
+            )
+            
+            return jsonify({
+                'success': True,
+                'message': f'Planned rotation will take effect on {start_date.strftime("%Y-%m-%d")}.',
+                'rotation': rotation,
+                'calendar_updated': False,
+                'dashboard_updated': False,
+                'start_date_in_future': True,
+                'planned_rotation': True
+            })
+        else:
+            # Immediate application - existing logic
+            # Get current rotation configuration
+            from models import StandbyDurationConfig
+            config = StandbyDurationConfig.query.filter_by(department_id=department_id).first()
+            
+            # Check if rotation start date is in the future
+            today = datetime.now().date()
+            start_date_in_future = False
+            
+            if config and config.rotation_start_date:
+                start_date_in_future = config.rotation_start_date > today
+            
+            # Update rotation order in database
+            update_rotation_order(rotation)
+            
+            # Delete any existing future rotation plan since we're applying immediately
+            delete_future_rotation_plan(department_id)
+            
+            # Determine what to update based on start date
+            update_info = {
+                'calendar_updated': False,
+                'dashboard_updated': False,
+                'message': 'Rotation saved successfully'
+            }
+            
+            if start_date_in_future:
+                # Only update calendar (future assignments)
+                try:
+                    from .utils.assignment_rotation_manager import AssignmentRotationManager
+                    regenerated_count = AssignmentRotationManager.regenerate_future_assignments(department_id)
+                    update_info['calendar_updated'] = True
+                    update_info['message'] = f'Rotation saved! Calendar updated with {regenerated_count} future assignments. Dashboard will update when rotation start date is reached.'
+                except Exception as e:
+                    update_info['message'] = f'Rotation saved but failed to update calendar: {str(e)}'
+            else:
+                # Update both calendar and dashboard (affects current assignments)
+                try:
+                    from .utils.assignment_rotation_manager import AssignmentRotationManager
+                    regenerated_count = AssignmentRotationManager.regenerate_future_assignments(department_id)
+                    update_info['calendar_updated'] = True
+                    update_info['dashboard_updated'] = True
+                    update_info['message'] = f'Rotation saved! Calendar and dashboard updated with {regenerated_count} assignments.'
+                except Exception as e:
+                    update_info['message'] = f'Rotation saved but failed to update assignments: {str(e)}'
+            
+            return jsonify({
+                'success': True, 
+                'message': update_info['message'],
+                'rotation': rotation,
+                'calendar_updated': update_info['calendar_updated'],
+                'dashboard_updated': update_info['dashboard_updated'],
+                'start_date_in_future': start_date_in_future,
+                'planned_rotation': False
+            })
+        
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Error saving rotation: {str(e)}'}), 500
 
 @standby_bp.route('/overtime', methods=['GET', 'POST'])
 @login_required
 def overtime():
     now = datetime.now()
     year, month = now.year, now.month
-    roster_data = load_roster()
+    
+    # Get department ID for roster filtering
+    department_id = current_user.department.id if current_user.department else None
+    roster_data = load_roster(department_id)
     team_members = [m for m in roster_data.get('team_members', []) if m.get('active', True)]
 
     # For GET
     selected_person = request.args.get('person')
     if selected_person is None:
         today_str = now.strftime('%Y-%m-%d')
-        selected_person = get_standby_person(today_str)
+        selected_person = get_standby_person(today_str, department_id)
 
     if request.method == 'POST':
         start_time = request.form.get('start_time')
@@ -425,17 +881,8 @@ def overtime():
 
     # Updated logic for 'All Team Members'
     if selected_person == '':
-        # Combine logs for all active team members
-        overtime_logs = []
-        for member in team_members:
-            member_logs = load_overtime_logs(member['name'], year, month)
-            for log in member_logs:
-                # Ensure the person field is set (for display)
-                if not log.get('person'):
-                    log['person'] = member['name']
-                overtime_logs.append(log)
-        # Sort logs by start_time descending
-        overtime_logs.sort(key=lambda x: x.get('start_time', ''), reverse=True)
+        # Get all overtime logs for the month
+        overtime_logs = get_all_overtime_logs(year, month)
     else:
         overtime_logs = load_overtime_logs(selected_person, year, month)
 
@@ -448,22 +895,6 @@ def overtime():
             except (ValueError, TypeError):
                 pass
     
-    # Add year and month fields to each log for template use
-    for log in overtime_logs:
-        start_time = log.get('start_time', '')
-        if start_time:
-            # Support both 'YYYY-MM-DD HH:MM' and 'YYYY-MM-DDTHH:MM' formats
-            date_part = start_time.split('T')[0] if 'T' in start_time else start_time.split(' ')[0]
-            parts = date_part.split('-')
-            if len(parts) == 3:
-                log['year'] = parts[0]
-                log['month'] = int(parts[1])
-            else:
-                log['year'] = ''
-                log['month'] = ''
-        else:
-            log['year'] = ''
-            log['month'] = ''
     # Get current standby user
     current_user_name = current_user.username
     
@@ -481,7 +912,8 @@ def api_current_standby():
     """API endpoint to get current standby person"""
     try:
         today = datetime.today().strftime('%Y-%m-%d')
-        current_standby = get_standby_person(today)
+        department_id = current_user.department.id if current_user.department else None
+        current_standby = get_standby_person(today, department_id)
         return jsonify({
             'current_standby': current_standby,
             'date': today
@@ -513,25 +945,56 @@ def api_total_hours():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+
+@standby_bp.route('/api/upcoming-rotation')
+@login_required
+def api_upcoming_rotation():
+    """API endpoint to get the upcoming planned rotation"""
+    try:
+        department_id = current_user.department.id if current_user.department else None
+        if not department_id:
+            return jsonify({'upcoming': None})
+        
+        from .utils.rotation_planner import get_active_future_rotation_plan
+        plan = get_active_future_rotation_plan(department_id)
+        
+        if not plan:
+            return jsonify({'upcoming': None})
+        
+        return jsonify({
+            'upcoming': {
+                'rotation_order': plan.get_rotation_list(),
+                'start_date': plan.start_date.isoformat(),
+                'notes': plan.notes,
+                'created_by': plan.created_by.username if plan.created_by else None
+            }
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 @standby_bp.route('/roster/edit_member', methods=['POST'])
 @login_required
 def edit_member():
-    roster_data = load_roster()
     name_original = request.form.get('name_original')
     name = request.form.get('name')
     color = request.form.get('color')
     active = bool(request.form.get('active'))
     
-    # Find and update the member
-    for member in roster_data.get('team_members', []):
-        if member.get('name') == name_original:
-            member['name'] = name
-            member['color'] = color
-            member['active'] = active
-            break
+    try:
+        # Update the team member using database functions
+        update_team_member(name_original, color=color, active=active)
+        
+        # If the name was changed, we need to handle that separately
+        if name != name_original:
+            # For now, we'll just update the color and active status
+            # Name changes would require more complex logic to handle rotation updates
+            flash(f'Team member {name_original} updated! (Note: Name changes are not yet supported)', 'success')
+        else:
+            flash(f'Team member {name_original} updated!', 'success')
+            
+    except ValueError as e:
+        flash(f'Error: {e}', 'warning')
     
-    save_roster(roster_data)
-    flash(f'Team member {name_original} updated!', 'success')
     return redirect(url_for('standby.roster'))
 
 @standby_bp.route('/api/roster-notifications')
@@ -539,7 +1002,9 @@ def edit_member():
 def api_roster_notifications():
     """API endpoint to get roster-related notifications"""
     try:
-        roster_data = load_roster()
+        # Get department ID for roster filtering
+        department_id = current_user.department.id if current_user.department else None
+        roster_data = load_roster(department_id)
         team_members = roster_data.get('team_members', [])
         overrides = roster_data.get('overrides', {})
         
@@ -653,3 +1118,28 @@ def edit_overtime_entry(person, year, month, entry_id):
         else:
             flash('Log not found.', 'danger')
         return redirect(url_for('standby.overtime', person=person))
+
+@standby_bp.route('/roster/remove_member', methods=['POST'])
+@login_required
+def remove_member():
+    name = request.form.get('name')
+    if not name:
+        flash('No member specified.', 'danger')
+        return redirect(url_for('standby.roster'))
+    try:
+        from models import User, StandbyMember
+        user = User.query.filter_by(username=name).first()
+        if user:
+            standby_member = StandbyMember.query.filter_by(user_id=user.id).first()
+            if standby_member:
+                # Remove the member from the team (delete or deactivate)
+                db.session.delete(standby_member)
+                db.session.commit()
+                flash(f'{name} removed from the team.', 'success')
+            else:
+                flash(f'{name} is not a standby member.', 'warning')
+        else:
+            flash(f'User {name} not found.', 'warning')
+    except Exception as e:
+        flash(f'Error removing {name}: {e}', 'danger')
+    return redirect(url_for('standby.roster'))

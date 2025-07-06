@@ -1,0 +1,374 @@
+{% extends 'base.html' %}
+
+{% block title %}Duration Configuration | Standby Overtime App{% endblock %}
+
+{% block extra_css %}
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com"></script>
+<!-- Bootstrap Icons -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+<style>
+    .form-section {
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    
+    .form-section:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 15px rgba(0, 0, 0, 0.15);
+    }
+    
+    .config-card {
+        border-left: 4px solid #3b82f6;
+        background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+    }
+    
+    .duration-input {
+        border: 2px solid #e2e8f0;
+        border-radius: 8px;
+        padding: 0.75rem;
+        transition: all 0.2s ease;
+    }
+    
+    .duration-input:focus {
+        border-color: #3b82f6;
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        outline: none;
+    }
+    
+    .help-text {
+        color: #64748b;
+        font-size: 0.875rem;
+        margin-top: 0.25rem;
+    }
+    
+    .save-btn {
+        background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+        border: none;
+        border-radius: 8px;
+        padding: 0.75rem 2rem;
+        color: white;
+        font-weight: 600;
+        transition: all 0.2s ease;
+    }
+    
+    .save-btn:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+    }
+    
+    .save-btn:active {
+        transform: translateY(0);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-gray-50">
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- Page Header with Breadcrumb -->
+        <nav class="flex mb-6" aria-label="Breadcrumb">
+            <ol class="inline-flex items-center space-x-1 md:space-x-3">
+                <li class="inline-flex items-center">
+                    <a href="/dashboard" class="inline-flex items-center text-sm font-medium text-gray-700 hover:text-blue-600">
+                        <i class="bi bi-house-door mr-2"></i>
+                        Dashboard
+                    </a>
+                </li>
+                <li>
+                    <div class="flex items-center">
+                        <i class="bi bi-chevron-right text-gray-400 mx-2"></i>
+                        <a href="{{ url_for('standby.roster') }}" class="text-sm font-medium text-gray-700 hover:text-blue-600">
+                            Roster Management
+                        </a>
+                    </div>
+                </li>
+                <li>
+                    <div class="flex items-center">
+                        <i class="bi bi-chevron-right text-gray-400 mx-2"></i>
+                        <span class="text-sm font-medium text-gray-500">Duration Configuration</span>
+                    </div>
+                </li>
+            </ol>
+        </nav>
+
+        <!-- Header Section -->
+        <div class="mb-8">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h1 class="text-3xl font-bold text-gray-900 mb-2">Standby Duration Configuration</h1>
+                    <p class="text-gray-600">Configure standby settings for {{ department.name }} department</p>
+                </div>
+                <div class="flex items-center space-x-3">
+                    <a href="{{ url_for('standby.roster') }}" class="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200">
+                        <i class="bi bi-arrow-left mr-2"></i>
+                        Back to Roster
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Flash Messages -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="mb-6 p-4 rounded-lg border-l-4 {% if category == 'error' %}bg-red-50 border-red-400 text-red-700{% elif category == 'success' %}bg-green-50 border-green-400 text-green-700{% else %}bg-blue-50 border-blue-400 text-blue-700{% endif %}">
+                        <div class="flex">
+                            <div class="flex-shrink-0">
+                                <i class="bi bi-{% if category == 'error' %}exclamation-triangle{% else %}check-circle{% endif %}"></i>
+                            </div>
+                            <div class="ml-3">
+                                <p class="text-sm font-medium">{{ message }}</p>
+                            </div>
+                            <div class="ml-auto pl-3">
+                                <div class="-mx-1.5 -my-1.5">
+                                    <button type="button" class="inline-flex rounded-md p-1.5 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2" onclick="this.parentElement.parentElement.parentElement.parentElement.remove()">
+                                        <i class="bi bi-x text-lg"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <!-- Configuration Form -->
+        <form method="post" class="space-y-6">
+            <!-- Standby Shift Settings Section -->
+            <div class="form-section p-6">
+                <div class="flex items-center mb-6">
+                    <div class="flex-shrink-0">
+                        <i class="bi bi-calendar-check text-2xl text-blue-600"></i>
+                    </div>
+                    <div class="ml-4">
+                        <h3 class="text-lg font-semibold text-gray-900">Standby Shift Settings</h3>
+                        <p class="text-sm text-gray-600">Configure how long each person works on standby shifts</p>
+                    </div>
+                </div>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <label for="standby_shift_days" class="block text-sm font-medium text-gray-700 mb-2">
+                            <i class="bi bi-calendar-range text-blue-500 mr-1"></i>
+                            Standby Shift Length (days)
+                        </label>
+                        <input type="number" 
+                               id="standby_shift_days" 
+                               name="standby_shift_days" 
+                               value="{{ config.standby_shift_days if config else 1 }}"
+                               min="1" 
+                               max="14"
+                               class="duration-input w-full"
+                               required>
+                        <p class="help-text">How many consecutive days each person works on standby</p>
+                        <div class="mt-2 p-3 bg-blue-50 rounded-lg">
+                            <p class="text-sm text-blue-800">
+                                <strong>Examples:</strong><br>
+                                • 1 day = One day on, then next person<br>
+                                • 2 days = Two days on, then next person<br>
+                                • 7 days = One week on, then next person
+                            </p>
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <label for="rotation_start_date" class="block text-sm font-medium text-gray-700 mb-2">
+                            <i class="bi bi-calendar-plus text-green-500 mr-1"></i>
+                            Rotation Start Date
+                        </label>
+                        <input type="date" 
+                               id="rotation_start_date" 
+                               name="rotation_start_date" 
+                               value="{{ config.rotation_start_date.strftime('%Y-%m-%d') if config else '2024-01-01' }}"
+                               class="duration-input w-full"
+                               required>
+                        <p class="help-text">Date when the rotation pattern begins</p>
+                        <div class="mt-2 p-3 bg-green-50 rounded-lg">
+                            <p class="text-sm text-green-800">
+                                <strong>How it works:</strong><br>
+                                • The rotation starts from this date<br>
+                                • Each person works for the number of days specified above<br>
+                                • The system calculates who should be on standby based on days since this start date<br>
+                                • Changing this date will shift the entire rotation pattern
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Overtime Settings Section -->
+            <div class="form-section p-6">
+                <div class="flex items-center mb-6">
+                    <div class="flex-shrink-0">
+                        <i class="bi bi-exclamation-triangle text-2xl text-amber-600"></i>
+                    </div>
+                    <div class="ml-4">
+                        <h3 class="text-lg font-semibold text-gray-900">Overtime Settings</h3>
+                        <p class="text-sm text-gray-600">Configure overtime limits and warnings</p>
+                    </div>
+                </div>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <label for="monthly_overtime_limit" class="block text-sm font-medium text-gray-700 mb-2">
+                            <i class="bi bi-speedometer2 text-red-500 mr-1"></i>
+                            Monthly Overtime Limit (hours)
+                        </label>
+                        <input type="number" 
+                               id="monthly_overtime_limit" 
+                               name="monthly_overtime_limit" 
+                               value="{{ config.monthly_overtime_limit if config else 40.0 }}"
+                               min="0" 
+                               max="200"
+                               step="0.5"
+                               class="duration-input w-full"
+                               required>
+                        <p class="help-text">Maximum overtime hours allowed per month</p>
+                    </div>
+                    
+                    <div>
+                        <label for="overtime_warning_threshold" class="block text-sm font-medium text-gray-700 mb-2">
+                            <i class="bi bi-exclamation-circle text-amber-500 mr-1"></i>
+                            Warning Threshold (hours)
+                        </label>
+                        <input type="number" 
+                               id="overtime_warning_threshold" 
+                               name="overtime_warning_threshold" 
+                               value="{{ config.overtime_warning_threshold if config else 35.0 }}"
+                               min="0" 
+                               max="200"
+                               step="0.5"
+                               class="duration-input w-full"
+                               required>
+                        <p class="help-text">Hours at which overtime warnings are triggered</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Notification Settings Section -->
+            <div class="form-section p-6">
+                <div class="flex items-center mb-6">
+                    <div class="flex-shrink-0">
+                        <i class="bi bi-bell text-2xl text-purple-600"></i>
+                    </div>
+                    <div class="ml-4">
+                        <h3 class="text-lg font-semibold text-gray-900">Notification Settings</h3>
+                        <p class="text-sm text-gray-600">Configure dashboard refresh and notification behavior</p>
+                    </div>
+                </div>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <label for="dashboard_refresh_interval" class="block text-sm font-medium text-gray-700 mb-2">
+                            <i class="bi bi-arrow-clockwise text-purple-500 mr-1"></i>
+                            Dashboard Refresh (seconds)
+                        </label>
+                        <input type="number" 
+                               id="dashboard_refresh_interval" 
+                               name="dashboard_refresh_interval" 
+                               value="{{ config.dashboard_refresh_interval if config else 300 }}"
+                               min="30" 
+                               max="3600"
+                               step="30"
+                               class="duration-input w-full"
+                               required>
+                        <p class="help-text">How often the dashboard auto-refreshes (30-3600 seconds)</p>
+                    </div>
+                    
+                    <div>
+                        <label for="notification_auto_dismiss" class="block text-sm font-medium text-gray-700 mb-2">
+                            <i class="bi bi-clock text-purple-500 mr-1"></i>
+                            Auto-dismiss Notifications (seconds)
+                        </label>
+                        <input type="number" 
+                               id="notification_auto_dismiss" 
+                               name="notification_auto_dismiss" 
+                               value="{{ config.notification_auto_dismiss if config else 10 }}"
+                               min="5" 
+                               max="60"
+                               step="1"
+                               class="duration-input w-full"
+                               required>
+                        <p class="help-text">How long notifications stay visible before auto-dismissing</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Save Button -->
+            <div class="flex justify-end">
+                <button type="submit" class="save-btn">
+                    <i class="bi bi-check-circle mr-2"></i>
+                    Save Configuration
+                </button>
+            </div>
+        </form>
+
+        <!-- Configuration Info -->
+        <div class="mt-8 config-card p-6">
+            <div class="flex items-start">
+                <div class="flex-shrink-0">
+                    <i class="bi bi-info-circle text-blue-500 text-xl"></i>
+                </div>
+                <div class="ml-3">
+                    <h4 class="text-sm font-medium text-blue-800">Configuration Information</h4>
+                    <div class="mt-2 text-sm text-blue-700">
+                        <p>• These settings apply to the <strong>{{ department.name }}</strong> department only</p>
+                        <p>• Changes will take effect immediately for new standby assignments</p>
+                        <p>• Duration settings affect how long each person stays on standby</p>
+                        <p>• Overtime limits help manage workload and prevent burnout</p>
+                        <p>• Only administrators can modify these settings</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Form validation
+    const form = document.querySelector('form');
+    const inputs = form.querySelectorAll('input[type="number"]');
+    
+    inputs.forEach(input => {
+        input.addEventListener('input', function() {
+            const value = parseFloat(this.value);
+            const min = parseFloat(this.min);
+            const max = parseFloat(this.max);
+            
+            if (value < min) {
+                this.value = min;
+            } else if (value > max) {
+                this.value = max;
+            }
+        });
+    });
+    
+    // Auto-save indicator
+    let saveTimeout;
+    inputs.forEach(input => {
+        input.addEventListener('input', function() {
+            clearTimeout(saveTimeout);
+            const saveBtn = document.querySelector('.save-btn');
+            saveBtn.innerHTML = '<i class="bi bi-pencil mr-2"></i>Unsaved Changes';
+            saveBtn.classList.add('bg-amber-600');
+            
+            saveTimeout = setTimeout(() => {
+                saveBtn.innerHTML = '<i class="bi bi-check-circle mr-2"></i>Save Configuration';
+                saveBtn.classList.remove('bg-amber-600');
+            }, 2000);
+        });
+    });
+    
+    // Form submission
+    form.addEventListener('submit', function(e) {
+        const saveBtn = document.querySelector('.save-btn');
+        saveBtn.innerHTML = '<i class="bi bi-hourglass-split mr-2"></i>Saving...';
+        saveBtn.disabled = true;
+    });
+});
+</script>
+{% endblock %} 
