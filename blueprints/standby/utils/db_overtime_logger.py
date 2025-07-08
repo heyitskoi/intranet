@@ -48,11 +48,21 @@ def load_overtime_logs(username: str, year: int, month: int):
     return result
 
 
+def parse_datetime(dt_str):
+    """Parse a datetime string in either 'YYYY-MM-DDTHH:MM' or 'YYYY-MM-DD HH:MM' format."""
+    for fmt in ("%Y-%m-%dT%H:%M", "%Y-%m-%d %H:%M"):
+        try:
+            return datetime.strptime(dt_str, fmt)
+        except ValueError:
+            continue
+    raise ValueError(f"Invalid time format: {dt_str}")
+
+
 def validate_overtime_entry(start_str: str, end_str: str):
     """Validate overtime entry times and calculate duration."""
     try:
-        start_time = datetime.strptime(start_str, '%Y-%m-%d %H:%M')
-        end_time = datetime.strptime(end_str, '%Y-%m-%d %H:%M')
+        start_time = parse_datetime(start_str)
+        end_time = parse_datetime(end_str)
         
         if end_time <= start_time:
             return False, "End time must be after start time"
@@ -76,8 +86,8 @@ def save_overtime_entry(username: str, year: int, month: int, entry_data: dict):
         raise ValueError(f"User '{username}' not found")
     
     # Parse times
-    start_time = datetime.strptime(entry_data['start_time'], '%Y-%m-%d %H:%M')
-    end_time = datetime.strptime(entry_data['end_time'], '%Y-%m-%d %H:%M')
+    start_time = parse_datetime(entry_data['start_time'])
+    end_time = parse_datetime(entry_data['end_time'])
     
     # Create overtime log entry
     overtime_log = OvertimeLog(
@@ -108,9 +118,9 @@ def update_overtime_entry(username: str, year: int, month: int, entry_id: str, u
     
     # Update fields
     if 'start_time' in updated_data:
-        overtime_log.start_time = datetime.strptime(updated_data['start_time'], '%Y-%m-%d %H:%M')
+        overtime_log.start_time = parse_datetime(updated_data['start_time'])
     if 'end_time' in updated_data:
-        overtime_log.end_time = datetime.strptime(updated_data['end_time'], '%Y-%m-%d %H:%M')
+        overtime_log.end_time = parse_datetime(updated_data['end_time'])
     if 'duration_hours' in updated_data:
         overtime_log.duration_hours = float(updated_data['duration_hours'])
     if 'issue_description' in updated_data:

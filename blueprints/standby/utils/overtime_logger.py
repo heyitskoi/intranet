@@ -49,11 +49,20 @@ def load_overtime_logs(person, year, month):
     
     return logs
 
+def parse_datetime(dt_str):
+    """Parse a datetime string in either 'YYYY-MM-DDTHH:MM' or 'YYYY-MM-DD HH:MM' format."""
+    for fmt in ("%Y-%m-%dT%H:%M", "%Y-%m-%d %H:%M"):
+        try:
+            return datetime.strptime(dt_str, fmt)
+        except ValueError:
+            continue
+    raise ValueError(f"Invalid time format: {dt_str}")
+
 def validate_overtime_entry(start_str, end_str):
     """Validate overtime entry times and calculate duration"""
     try:
-        start_time = datetime.strptime(start_str, '%Y-%m-%d %H:%M')
-        end_time = datetime.strptime(end_str, '%Y-%m-%d %H:%M')
+        start_time = parse_datetime(start_str)
+        end_time = parse_datetime(end_str)
         
         if end_time <= start_time:
             return False, "End time must be after start time"

@@ -149,7 +149,7 @@
                         <i class="bi bi-clock-history"></i> Overtime Logs
                     </h5>
                     <div class="d-flex gap-2">
-                        <form method="get" action="/overtime" class="d-flex gap-2">
+                        <form method="get" action="/standby/overtime" class="d-flex gap-2">
                             <select name="person" id="person" class="form-select form-select-sm" style="width: auto;">
                                 <option value="">All Team Members</option>
                                 {% for member in team_members %}
@@ -570,7 +570,7 @@ function viewOvertimeDetails(id, person, year, month) {
     `;
     const modal = new bootstrap.Modal(document.getElementById('overtimeDetailsModal'));
     modal.show();
-    fetch(`/overtime/edit/${encodeURIComponent(person)}/${year}/${month}/${id}`)
+    fetch(`/standby/overtime/edit/${encodeURIComponent(person)}/${year}/${month}/${id}`)
         .then(res => res.json())
         .then(log => {
             if (log.error) {
@@ -587,6 +587,26 @@ function viewOvertimeDetails(id, person, year, month) {
                     <dt class="col-sm-3">Resolution</dt><dd class="col-sm-9">${log.resolution_notes || '-'}</dd>
                 </dl>
             `;
+            
+            // Set up the edit button functionality
+            document.getElementById('editOvertimeBtn').onclick = function() {
+                // Close the details modal
+                const detailsModal = bootstrap.Modal.getInstance(document.getElementById('overtimeDetailsModal'));
+                detailsModal.hide();
+                
+                // Open the edit modal with the same data
+                document.getElementById('edit_person').value = person;
+                document.getElementById('edit_year').value = year;
+                document.getElementById('edit_month').value = month;
+                document.getElementById('edit_id').value = id;
+                document.getElementById('edit_start_time').value = log.start_time.replace(' ', 'T');
+                document.getElementById('edit_end_time').value = log.end_time.replace(' ', 'T');
+                document.getElementById('edit_issue_description').value = log.issue_description || '';
+                document.getElementById('edit_resolution_notes').value = log.resolution_notes || '';
+                
+                const editModal = new bootstrap.Modal(document.getElementById('editOvertimeModal'));
+                editModal.show();
+            };
         });
 }
 
@@ -596,7 +616,7 @@ function editOvertime(btn) {
     const year = btn.getAttribute('data-year');
     const month = btn.getAttribute('data-month');
     const id = btn.getAttribute('data-id');
-    fetch(`/overtime/edit/${encodeURIComponent(person)}/${year}/${month}/${id}`)
+    fetch(`/standby/overtime/edit/${encodeURIComponent(person)}/${year}/${month}/${id}`)
         .then(res => res.json())
         .then(log => {
             if (log.error) {
@@ -623,7 +643,7 @@ document.getElementById('editOvertimeForm').addEventListener('submit', function(
     const month = document.getElementById('edit_month').value;
     const id = document.getElementById('edit_id').value;
     const formData = new FormData(this);
-    fetch(`/overtime/edit/${encodeURIComponent(person)}/${year}/${month}/${id}`, {
+    fetch(`/standby/overtime/edit/${encodeURIComponent(person)}/${year}/${month}/${id}`, {
         method: 'POST',
         body: formData
     }).then(res => {

@@ -1143,3 +1143,70 @@ def remove_member():
     except Exception as e:
         flash(f'Error removing {name}: {e}', 'danger')
     return redirect(url_for('standby.roster'))
+
+@standby_bp.route('/overtime-overview', methods=['GET'])
+@login_required
+def overtime_overview():
+    """Overtime overview for the current user's department, with month selection."""
+    # Get department ID
+    department_id = current_user.department.id if current_user.department else None
+    if not department_id:
+        return render_template('standby/overtime_overview.html', months=[], selected_month=None, selected_month_label=None, overtime_logs=[])
+
+    # Calculate last 6 months (including current)
+    now = datetime.now()
+    months = []
+    for i in range(6):
+        dt = (now.replace(day=1) - timedelta(days=1)).replace(day=1) if i > 0 else now.replace(day=1)
+        dt = now.replace(day=1) - timedelta(days=30*i)
+        months.append({
+            'value': dt.strftime('%Y-%m'),
+            'label': dt.strftime('%B %Y'),
+            'year': dt.year,
+            'month': dt.month
+        })
+    months = sorted(months, key=lambda m: (m['year'], m['month']), reverse=True)
+
+    # Get selected month from query params
+    selected_month = request.args.get('month')
+    if not selected_month:
+        selected_month = months[0]['value']
+    selected_month_dt = datetime.strptime(selected_month, '%Y-%m')
+    selected_month_label = selected_month_dt.strftime('%B %Y')
+
+    # Query all users in department
+    from models import User, OvertimeLog
+    users = User.query.filter_by(department_id=department_id).all()
+    user_ids = [u.id for u in users]
+
+    # Query overtime logs for department users in selected month
+    start_date = selected_month_dt.replace(day=1)
+    if selected_month_dt.month == 12:
+        end_date = selected_month_dt.replace(year=selected_month_dt.year+1, month=1, day=1)
+    else:
+        end_date = selected_month_dt.replace(month=selected_month_dt.month+1, day=1)
+    overtime_logs = OvertimeLog.query.filter(
+        OvertimeLog.user_id.in_(user_ids),
+        OvertimeLog.start_time >= start_date,
+        OvertimeLog.start_time < end_date
+    ).order_by(OvertimeLog.start_time.desc()).all()
+
+    # Convert logs to dicts for template
+    logs = []
+    for log in overtime_logs:
+        logs.append({
+            'person': log.user.username,
+            'start_time': log.start_time.strftime('%Y-%m-%d %H:%M'),
+            'end_time': log.end_time.strftime('%Y-%m-%d %H:%M'),
+            'duration_hours': f"{log.duration_hours:.2f}",
+            'issue_description': log.issue_description or '',
+            'resolution_notes': log.resolution_notes or ''
+        })
+
+    return render_template(
+        'standby/overtime_overview.html',
+        months=months,
+        selected_month=selected_month,
+        selected_month_label=selected_month_label,
+        overtime_logs=logs
+    )
